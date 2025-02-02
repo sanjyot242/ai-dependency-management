@@ -1,0 +1,40 @@
+version: "3.8"
+
+services:
+  node-service:
+    build: 
+      context: ./node-service
+      dockerfile: Dockerfile
+    container_name: node-service
+    ports:
+      - "3001:3001"
+    depends_on:
+      - python-service
+    # Optional environment variables:
+    environment:
+      - NODE_ENV=production
+      # If you need to talk to Python service, you can reference service name:
+      - PYTHON_SERVICE_URL=http://python-service:3002
+
+  python-service:
+    build:
+      context: ./python-service
+      dockerfile: Dockerfile
+    container_name: python-service
+    ports:
+      - "3002:3002"
+    # Optional environment vars:
+    environment:
+      - PYTHONUNBUFFERED=1
+      # For a DB, if you want to add Postgres later:
+      # - DATABASE_URL=postgres://postgres:postgres@db:5432/mydb
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: frontend
+    ports:
+      - "8080:80"
+    depends_on:
+      - node-service
