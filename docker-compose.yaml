@@ -1,8 +1,8 @@
 version: "3.8"
-#updated git name
+
 services:
   node-service:
-    build: 
+    build:
       context: ./node-service
       dockerfile: Dockerfile
     container_name: node-service
@@ -10,10 +10,10 @@ services:
       - "3001:3001"
     depends_on:
       - python-service
-    # Optional environment variables:
+      - db
     environment:
       - NODE_ENV=production
-      # If you need to talk to Python service, you can reference service name:
+      - MONGO_URL=mongodb://db:27017/dependencydb
       - PYTHON_SERVICE_URL=http://python-service:3002
 
   python-service:
@@ -23,11 +23,9 @@ services:
     container_name: python-service
     ports:
       - "3002:3002"
-    # Optional environment vars:
     environment:
       - PYTHONUNBUFFERED=1
-      # For a DB, if you want to add Postgres later:
-      # - DATABASE_URL=postgres://postgres:postgres@db:5432/mydb
+      # If Python needs DB access later, you can add MONGO_URL here as well.
 
   frontend:
     build:
@@ -38,3 +36,12 @@ services:
       - "8080:80"
     depends_on:
       - node-service
+
+  db:
+    image: mongo:6
+    container_name: db
+    ports:
+      - "27017:27017"
+    # No environment variables needed for a basic Mongo container,
+    # but you can set MONGO_INITDB_ROOT_USERNAME, MONGO_INITDB_ROOT_PASSWORD
+    # if you want authentication.
