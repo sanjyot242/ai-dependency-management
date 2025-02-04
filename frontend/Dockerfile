@@ -13,6 +13,7 @@
     
     # --- Stage 2: Serve with Nginx ---
     FROM nginx:alpine
+    COPY nginx.conf /etc/nginx/conf.d/default.conf
     # Copy the built files from the previous stage
     COPY --from=build /usr/src/app/dist /usr/share/nginx/html
     

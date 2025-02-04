@@ -2,9 +2,9 @@ const express = require('express');
 const cors = require('cors');
 
 const connectDB = require('./db'); // <-- import the connection function
-const User = require('./models/User');
 
-const authRoutes = require('./routes/auth.routes');
+const authRoutes = require('./routes/auth/auth.routes');
+const userRoutes = require('./routes/user/user.routes');
 
 const app = express();
 app.use(cors());
@@ -24,6 +24,7 @@ console.log("GITHUB_REDIRECT_URI:", process.env.GITHUB_REDIRECT_URI);
 
 app.use('/auth', authRoutes);
 
+app.use('/user', userRoutes);
 
 app.get('/health', (req, res) => {
   res.json({ status: 'Node Service OK' });

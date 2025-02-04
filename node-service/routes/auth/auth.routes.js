@@ -2,7 +2,7 @@
 
 const { Router } = require('express');
 const axios = require('axios');
-const User = require('../models/User');
+const User = require('../../models/User');
 const router = Router();
 
 // Redirect user to GitHub's OAuth page
@@ -61,7 +61,7 @@ router.get('/github/callback', async (req, res) => {
 
     // 4. Redirect or return some data
     // For a simpler approach, redirect with userId in query
-    return res.redirect(`http://localhost:3000/dashboard?userId=${user._id}`);
+    return res.redirect(`http://localhost:8080/dashboard?userId=${user._id}`);
   } catch (error) {
     console.error('GitHub OAuth callback error', error);
     return res.status(500).json({ error: 'Internal server error' });
