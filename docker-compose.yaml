@@ -15,6 +15,11 @@ services:
       - NODE_ENV=production
       - MONGO_URL=mongodb://db:27017/dependencydb
       - PYTHON_SERVICE_URL=http://python-service:3002
+      - GITHUB_CLIENT_ID=${GITHUB_CLIENT_ID}
+      - GITHUB_CLIENT_SECRET=${GITHUB_CLIENT_SECRET}
+      - GITHUB_REDIRECT_URI=${GITHUB_REDIRECT_URI}
+    env_file: 
+      - ./node-service/.env
 
   python-service:
     build:
