@@ -29,6 +29,7 @@ function Dashboard() {
       navigate("/")
       return
     }
+    
 
     // Fetch user data from Node
     fetch(`http://localhost:3001/user/${userIdFromUrl}`)
