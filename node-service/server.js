@@ -30,17 +30,7 @@ app.get('/health', (req, res) => {
   res.json({ status: 'Node Service OK' });
 });
 
-/*Test route to create a User
-app.post('/users', async (req, res) => {
-  try {
-    const { username, githubToken } = req.body;
-    const newUser = await User.create({ username, githubToken });
-    return res.json(newUser);
-  } catch (err) {
-    console.error('Error creating user:', err);
-    return res.status(500).json({ error: 'Internal server error' });
-  }
-});*/
+
 
 app.listen(PORT, () => {
   console.log(`Node service running on port ${PORT}`);

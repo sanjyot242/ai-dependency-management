@@ -7,15 +7,14 @@ const RepositorySchema = new mongoose.Schema({
     ref: 'User',
     required: true,
   },
-  repoName: String,
-  // Option A: embed dependencies directly
-  dependencies: [{
-    name: String,
-    currentVersion: String,
-    latestVersion: String,
-    riskScore: Number,
-    lastCheckedAt: Date,
-  }]
+  repoId: {
+    type: Number,
+    unique: true, //can be false if you want to allow multiple repos with the same ID( org level)
+  },
+  fullName:String,
+  private: Boolean,
+  htmlUrl: String,
+  description: String,
 }, { timestamps: true });
 
 module.exports = mongoose.model('Repository', RepositorySchema);
