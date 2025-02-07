@@ -26,7 +26,7 @@ router.get('/github/callback', async (req, res) => {
         client_id: process.env.GITHUB_CLIENT_ID,
         client_secret: process.env.GITHUB_CLIENT_SECRET,
         code,
-        redirect_uri: process.env.GITHUB_REDIRECT_URI
+        redirect_uri: process.env.GITHUB_REDIRECT_URI,
       },
       { headers: { Accept: 'application/json' } }
     );
@@ -39,8 +39,8 @@ router.get('/github/callback', async (req, res) => {
     // 2. Fetch the user's GitHub profile
     const userProfile = await axios.get('https://api.github.com/user', {
       headers: {
-        Authorization: `token ${access_token}`
-      }
+        Authorization: `token ${access_token}`,
+      },
     });
 
     const { login: githubUsername, id: githubId } = userProfile.data;
@@ -61,7 +61,9 @@ router.get('/github/callback', async (req, res) => {
 
     // 4. Redirect or return some data
     // For a simpler approach, redirect with userId in query
-    return res.redirect(`http://localhost:8080/dashboard?userId=${user._id}`);
+    return res.redirect(
+      `${process.env.FRONTEND_URL}/dashboard?userId=${user._id}`
+    );
   } catch (error) {
     console.error('GitHub OAuth callback error', error);
     return res.status(500).json({ error: 'Internal server error' });
