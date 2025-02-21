@@ -2,7 +2,7 @@
 import { useState } from 'react';
 
 function DependencyScanner({ repoId }) {
-  const [scanData, setScanData] = useState(null);
+  const [scanData, setScanData] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -33,6 +33,7 @@ function DependencyScanner({ repoId }) {
         const errBody2 = await latestScanRes.json();
         throw new Error(errBody2.error || 'Fetching latest scan failed');
       }
+
       const latestScanData = await latestScanRes.json();
       setScanData(latestScanData);
     } catch (err) {
@@ -52,14 +53,14 @@ function DependencyScanner({ repoId }) {
       </button>
       {error && <p className='text-red-500 mt-2'>{error}</p>}
 
-      {scanData && (
+      {scanData && scanData.length != 0 && (
         <div className='mt-4'>
           <h3 className='font-bold'>
             Scan Results (scanned at{' '}
             {new Date(scanData.scannedAt).toLocaleString()})
           </h3>
           <ul className='list-disc pl-5'>
-            {scanData.dependencies.map((dep) => (
+            {scanData.depedencis.map((dep) => (
               <li key={dep.packageName} className='mb-2'>
                 <strong>{dep.packageName}</strong> - Current:{' '}
                 {dep.currentVersion}, Latest: {dep.latestVersion}

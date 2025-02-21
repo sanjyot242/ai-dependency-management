@@ -5,7 +5,7 @@ const DependencySchema = new mongoosee.Schema(
     packageName: String,
     currentVersion: String,
     latestVersion: String,
-    isOutDated: Boolean,
+    isOutdated: Boolean,
   },
   { _id: false }
 );

@@ -1,15 +1,21 @@
 // node-service/routes/auth.routes.js
 
 const { Router } = require('express');
-const axios = require('axios');
 const User = require('../../models/User');
 const router = Router();
+const axiosInstance = require('../../utils/axiosLogger');
+const logger = require('../../utils/logger');
 
 // Redirect user to GitHub's OAuth page
 router.get('/github', (req, res) => {
   const githubAuthUrl = `https://github.com/login/oauth/authorize?client_id=${process.env.GITHUB_CLIENT_ID}&redirect_uri=${process.env.GITHUB_REDIRECT_URI}&scope=repo,user`;
   return res.redirect(githubAuthUrl);
 });
+
+logger.info("Redirect user to GitHub's OAuth page");
+logger.info('GITHUB_CLIENT_ID:', process.env.GITHUB_CLIENT_ID);
+logger.info('GITHUB_CLIENT_SECRET:', process.env.GITHUB_CLIENT_SECRET);
+logger.info('GITHUB_REDIRECT_URI:', process.env.GITHUB_REDIRECT_URI);
 
 // Handle GitHub's callback with ?code=XYZ
 router.get('/github/callback', async (req, res) => {
@@ -20,7 +26,7 @@ router.get('/github/callback', async (req, res) => {
 
   try {
     // 1. Exchange code for access token
-    const tokenResponse = await axios.post(
+    const tokenResponse = await axiosInstance.post(
       'https://github.com/login/oauth/access_token',
       {
         client_id: process.env.GITHUB_CLIENT_ID,
@@ -37,7 +43,7 @@ router.get('/github/callback', async (req, res) => {
     }
 
     // 2. Fetch the user's GitHub profile
-    const userProfile = await axios.get('https://api.github.com/user', {
+    const userProfile = await axiosInstance.get('https://api.github.com/user', {
       headers: {
         Authorization: `token ${access_token}`,
       },

@@ -1,5 +1,7 @@
 const express = require('express');
 const cors = require('cors');
+const morgan = require('morgan');
+const logger = require('./utils/logger');
 const path = require('path');
 
 const connectDB = require('./db'); // <-- import the connection function
@@ -7,6 +9,7 @@ const connectDB = require('./db'); // <-- import the connection function
 const authRoutes = require('./routes/auth/auth.routes');
 const userRoutes = require('./routes/user/user.routes');
 const repoRoutes = require('./routes/repos/repo.routes');
+const dependencyRoutes = require('./routes/dependency/dependency.routes');
 
 const app = express();
 app.use(cors());
@@ -15,6 +18,22 @@ app.use(express.json());
 const PORT = process.env.NODE_PORT || 3001;
 
 require('dotenv').config({ path: path.resolve(__dirname, '../.env') });
+
+// A custom token to include method, url, and status
+morgan.token('custom', (req, res) => {
+  return `${req.method} ${req.originalUrl} ${res.statusCode}`;
+});
+
+const morganFormat = morgan(
+  ':remote-addr :custom :res[content-length] - :response-time ms',
+  {
+    stream: {
+      write: (message) => logger.info(message.trim()),
+    },
+  }
+);
+
+app.use(morganFormat);
 
 // Initialize MongoDB connection
 connectDB();
@@ -27,6 +46,8 @@ app.use('/auth', authRoutes);
 app.use('/user', userRoutes);
 
 app.use('/repos', repoRoutes);
+
+app.use('/dependencies', dependencyRoutes);
 
 app.get('/health', (req, res) => {
   res.json({ status: 'Node Service OK' });

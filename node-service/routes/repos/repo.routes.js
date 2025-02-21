@@ -3,6 +3,7 @@ const { Router } = require('express');
 const axios = require('axios');
 const User = require('../../models/User');
 const Repository = require('../../models/Repository');
+const axiosInstance = require('../../utils/axiosLogger');
 
 const router = Router();
 
@@ -15,12 +16,15 @@ router.post('/sync', async (req, res) => {
     }
 
     // Fetch repos from GitHub
-    const ghResponse = await axios.get('https://api.github.com/user/repos', {
-      headers: {
-        Authorization: `token ${user.githubToken}`,
-        Accept: 'application/vnd.github.v3+json',
-      },
-    });
+    const ghResponse = await axiosInstance.get(
+      'https://api.github.com/user/repos',
+      {
+        headers: {
+          Authorization: `token ${user.githubToken}`,
+          Accept: 'application/vnd.github.v3+json',
+        },
+      }
+    );
     const githubRepos = ghResponse.data; // array of repo objects
 
     // Upsert each repository into Mongo
