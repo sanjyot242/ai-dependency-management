@@ -29,9 +29,10 @@ router.post('/sync', async (req, res) => {
         const filter = { repoId: repo.id };
         const update = {
           userId: user._id,
-          fullName: repo.full_name,
+          name: repo.name,
           private: repo.private,
           htmlUrl: repo.html_url,
+          owner: repo.owner.login,
           description: repo.description || '',
         };
         // Using upsert: true to create if not found, or update otherwise
