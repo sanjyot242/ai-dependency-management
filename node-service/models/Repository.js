@@ -1,20 +1,24 @@
 // node-service/models/Repository.js
 const mongoose = require('mongoose');
 
-const RepositorySchema = new mongoose.Schema({
-  userId: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'User',
-    required: true,
+const RepositorySchema = new mongoose.Schema(
+  {
+    userId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      required: true,
+    },
+    repoId: {
+      type: Number,
+      unique: true, //can be false if you want to allow multiple repos with the same ID( org level)
+    },
+    name: String,
+    private: Boolean,
+    htmlUrl: String,
+    owner: String,
+    description: String,
   },
-  repoId: {
-    type: Number,
-    unique: true, //can be false if you want to allow multiple repos with the same ID( org level)
-  },
-  fullName:String,
-  private: Boolean,
-  htmlUrl: String,
-  description: String,
-}, { timestamps: true });
+  { timestamps: true }
+);
 
 module.exports = mongoose.model('Repository', RepositorySchema);
