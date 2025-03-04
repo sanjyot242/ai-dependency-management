@@ -36,6 +36,8 @@ router.post('/scan', async (req, res) => {
     const githubToken = user.githubToken;
 
     // Use findPackageJsonFiles to scan the entire repo for package.json files
+    
+
     const packageJsonPaths = await findPackageJsonFiles(
       repo.owner,
       repo.name,
@@ -49,13 +51,14 @@ router.post('/scan', async (req, res) => {
         .json({ error: 'No package.json files found in the repository' });
     }
 
-    // Iterate through each package.json file to fetch and parse its content
+    // Iterate through each package.json path file to fetch and parse its content
     const packageJsons = [];
     for (const filePath of packageJsonPaths) {
       const content = await getFileContent(
         repo.owner,
         repo.name,
         filePath,
+        repo.defaultBranch || 'main',
         githubToken
       );
       if (content) {
@@ -81,7 +84,7 @@ router.post('/scan', async (req, res) => {
         userId: repo.userId,
         repoId: repo._id,
       },
-      { $set: { depedencis: scanResults } }, // update operator with correct field name
+      { $set: { dependencies: scanResults } }, // update operator with correct field name
       { new: true, upsert: true }
     );
     logger.info(`Scan saved to database: ${newScan}`);

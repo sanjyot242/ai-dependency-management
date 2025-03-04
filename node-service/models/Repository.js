@@ -17,8 +17,11 @@ const RepositorySchema = new mongoose.Schema(
     htmlUrl: String,
     owner: String,
     description: String,
+    baseBranch: String,
   },
   { timestamps: true }
 );
 
 module.exports = mongoose.model('Repository', RepositorySchema);
+
+
