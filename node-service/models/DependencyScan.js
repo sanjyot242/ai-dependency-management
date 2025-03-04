@@ -23,7 +23,7 @@ const DependencyScanSchema = new mongoosee.Schema({
     type: Date,
     default: Date.now,
   },
-  depedencis: [DependencySchema],
+  dependencies: [DependencySchema],
 });
 
 module.exports = mongoosee.model('DependencyScan', DependencyScanSchema);
