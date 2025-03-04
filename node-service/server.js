@@ -10,6 +10,7 @@ const authRoutes = require('./routes/auth/auth.routes');
 const userRoutes = require('./routes/user/user.routes');
 const repoRoutes = require('./routes/repos/repo.routes');
 const dependencyRoutes = require('./routes/dependency/dependency.routes');
+const prRoutes = require('./routes/pr/pr.routes');
 
 const app = express();
 app.use(cors());
@@ -48,6 +49,10 @@ app.use('/user', userRoutes);
 app.use('/repos', repoRoutes);
 
 app.use('/dependencies', dependencyRoutes);
+
+app.use('/pull-requests', prRoutes);
+
+
 
 app.get('/health', (req, res) => {
   res.json({ status: 'Node Service OK' });
