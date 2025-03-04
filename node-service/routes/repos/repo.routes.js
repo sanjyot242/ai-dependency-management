@@ -27,25 +27,29 @@ router.post('/sync', async (req, res) => {
     );
     const githubRepos = ghResponse.data; // array of repo objects
 
-    // Upsert each repository into Mongo
-    await Promise.all(
-      githubRepos.map(async (repo) => {
-        const filter = { repoId: repo.id };
-        const update = {
-          userId: user._id,
-          name: repo.name,
-          private: repo.private,
-          htmlUrl: repo.html_url,
-          owner: repo.owner.login,
-          description: repo.description || '',
-        };
-        // Using upsert: true to create if not found, or update otherwise
-        await Repository.findOneAndUpdate(filter, update, {
-          upsert: true,
-          new: true,
-        });
-      })
-    );
+
+    const bulkOps = githubRepos.map((repo)=>({
+      updateOne:{
+        filter: {repoId: repo.id},
+        update:{
+          $set:{
+            userId: user._id,
+            name: repo.name,
+            private: repo.private,
+            htmlUrl: repo.html_url,
+            owner: repo.owner.login,
+            description: repo.description || '',
+            baseBranch: repo.default_branch, // store the base branch info
+          },
+        },
+        upsert: true,
+      }
+   }));
+
+   await Repository.bulkWrite(bulkOps);
+
+  
+    
 
     res.json({ message: 'Repositories synced successfully' });
   } catch (error) {
