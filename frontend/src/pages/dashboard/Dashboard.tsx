@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
-import axios from 'axios';
+
 
 interface Repository {
   id: string;
@@ -19,7 +19,6 @@ const Dashboard: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const API_URL =  'http://localhost:3001/api';
 
   useEffect(() => {
     const fetchRepositories = async () => {
@@ -61,7 +60,7 @@ const Dashboard: React.FC = () => {
     };
     
     fetchRepositories();
-  }, [API_URL]);
+  }, []);
 
   return (
     <div className="min-h-screen bg-gray-50">

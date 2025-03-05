@@ -2,7 +2,8 @@
 
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import axios from 'axios';
+
+import apiClient from '../api';
 
 interface User {
   id: string;
@@ -22,8 +23,7 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-// API base URL - should come from environment variables
-const API_URL =  'http://localhost:3001/api';
+
 
 export const AuthContextProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
@@ -56,9 +56,7 @@ export const AuthContextProvider: React.FC<{ children: React.ReactNode }> = ({ c
         
         // Verify token by making a request to /auth/me
         // The HTTP-only cookie will be sent automatically
-        const response = await axios.get(`${API_URL}/auth/me`, {
-          withCredentials: true // Important: this tells axios to send cookies
-        });
+        const response = await apiClient.getCurrentUser();
         
         if (response.status === 200) {
           setUser(response.data);
@@ -83,10 +81,7 @@ export const AuthContextProvider: React.FC<{ children: React.ReactNode }> = ({ c
   const login = async (redirectUri: string = window.location.pathname) => {
     try {
       // Get the OAuth URL from our backend
-      const response = await axios.get(`${API_URL}/auth/github/login`, {
-        params: { redirectUri },
-        withCredentials: true
-      });
+      const response = await apiClient.getAuthUrl(redirectUri);
       
       // Redirect to the GitHub OAuth page
       window.location.href = response.data.authUrl;
@@ -99,9 +94,7 @@ export const AuthContextProvider: React.FC<{ children: React.ReactNode }> = ({ c
   const logout = async () => {
     try {
       // The HTTP-only cookie will be sent automatically
-      await axios.post(`${API_URL}/auth/logout`, {}, {
-        withCredentials: true
-      });
+      await apiClient.logout();
       
       setIsAuthenticated(false);
       setUser(null);
