@@ -1,6 +1,20 @@
 {
-  "dependencies": {
-    "morgan": "^1.10.0",
-    "winston": "^3.17.0"
-  }
+  "name": "ai-dependency-management",
+  "version": "1.0.0",
+  "description": "Dependency Management Tool With AI assistance for risk analysis",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/sanjyot242/ai-dependency-management.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/sanjyot242/ai-dependency-management/issues"
+  },
+  "homepage": "https://github.com/sanjyot242/ai-dependency-management#readme"
 }

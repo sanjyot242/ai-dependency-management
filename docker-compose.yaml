@@ -40,6 +40,10 @@ services:
       - '8080:80'
     depends_on:
       - node-service
+    env_file:
+      - ./frontend/.env
+
+
 
   db:
     image: mongo:6

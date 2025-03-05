@@ -29,7 +29,7 @@ start_service() {
 }
 
 # Start the Node service
-start_service "Node-Service" "node-service" "npm install" "npm start"
+start_service "Node-Service" "node-service" "npm install" "npm run build" "node dist/index.js"
 NODE_PID=$!
 
 # Start the Python service
