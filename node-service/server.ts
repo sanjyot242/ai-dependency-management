@@ -5,10 +5,14 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import morgan from 'morgan';
 import bodyParser from 'body-parser';
-import jwt from 'jsonwebtoken';
+
 import axios from 'axios';
 import path from 'path';
-import crypto from 'crypto';
+
+
+import cookieParser from 'cookie-parser';
+import authController from './controllers/auth.controller';
+import authenticateToken from './middleware/auth.middleware';
 
 // Load environment variables
 
@@ -30,29 +34,29 @@ console.log('GITHUB_CLIENT_ID:', process.env.GITHUB_CLIENT_ID);
 console.log('GITHUB_CLIENT_SECRET:', process.env.GITHUB_CLIENT_SECRET);
 console.log('GITHUB_REDIRECT_URI:', process.env.GITHUB_REDIRECT_URI);
 
+
+
+
+
 // Middleware
-app.use(cors());
+app.use(cookieParser()); // Parse cookies
+app.use(cors({
+  origin: FRONTEND_URL, // Allow frontend domain
+  credentials: true,    // Allow cookies to be sent
+  methods: ['GET', 'POST', 'PUT', 'DELETE'],
+  allowedHeaders: ['Content-Type', 'Authorization']
+}));
 app.use(morgan('dev'));
 app.use(bodyParser.json());
 
-// Simplified authentication middleware
-const authenticateToken = (req: Request, res: Response, next: NextFunction) => {
-  // Get token from header
-  const authHeader = req.headers['authorization'];
-  const token = authHeader && authHeader.split(' ')[1];
-  
-  if (!token) {
-    return res.status(401).json({ error: 'Unauthorized: No token provided' });
-  }
-  
-  try {
-    const user = jwt.verify(token, JWT_SECRET);
-    (req as any).user = user;
-    next();
-  } catch (error) {
-    return res.status(401).json({ error: 'Unauthorized: Invalid token' });
-  }
-};
+//auth Routes 
+// Auth Routes
+app.get('/api/auth/github/login', authController.initiateGithubAuth);
+app.get('/api/auth/github/callback', authController.handleGithubCallback);
+app.get('/api/auth/me', authenticateToken, authController.getCurrentUser);
+app.post('/api/auth/logout', authController.logout);
+
+
 
 // Routes
 
@@ -61,126 +65,6 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'ok' });
 });
 
-// Auth Routes
-app.get('/api/auth/github/login', (req, res) => {
-  const redirectUri = req.query.redirectUri as string || '/dashboard';
-  
-  // Generate a random state parameter to prevent CSRF attacks
-  const state = crypto.randomBytes(20).toString('hex');
-  
-  // Store the state and associated redirect URI
-  // Set expiration to 10 minutes from now
-  oauthStateStore[state] = {
-    redirectUri,
-    expiresAt: Date.now() + 10 * 60 * 1000
-  };
-  
-  // Build GitHub OAuth URL
-  const githubAuthUrl = `https://github.com/login/oauth/authorize?client_id=${GITHUB_CLIENT_ID}&redirect_uri=${GITHUB_REDIRECT_URI}&scope=repo,user:email&state=${state}`;
-  
-  res.json({ authUrl: githubAuthUrl });
-});
-
-
-app.get('/api/auth/github/callback', async (req, res) => {
-  const { code, state } = req.query;
-  
-  if (!code || !state) {
-    return res.redirect(`${FRONTEND_URL}/login?error=oauth_error`);
-  }
-  
-  // Verify state to prevent CSRF attacks
-  const storedState = oauthStateStore[state as string];
-  if (!storedState || storedState.expiresAt < Date.now()) {
-    // Invalid or expired state
-    delete oauthStateStore[state as string];
-    return res.redirect(`${FRONTEND_URL}/login?error=invalid_state`);
-  }
-  
-  try {
-    // Exchange code for access token
-    const tokenResponse = await axios.post(
-      'https://github.com/login/oauth/access_token',
-      {
-        client_id: GITHUB_CLIENT_ID,
-        client_secret: GITHUB_CLIENT_SECRET,
-        code,
-        redirect_uri: `${process.env.SERVER_URL || 'http://localhost:3001'}/api/auth/github/callback`
-      },
-      {
-        headers: {
-          Accept: 'application/json',
-        },
-      }
-    );
-    
-    const { access_token } = tokenResponse.data;
-    
-    if (!access_token) {
-      return res.redirect(`${FRONTEND_URL}/login?error=token_error`);
-    }
-    
-    // Get user info
-    const userResponse = await axios.get('https://api.github.com/user', {
-      headers: {
-        Authorization: `token ${access_token}`,
-      },
-    });
-    
-    // Get user emails
-    const emailsResponse = await axios.get('https://api.github.com/user/emails', {
-      headers: {
-        Authorization: `token ${access_token}`,
-      },
-    });
-    
-    // Find primary email
-    const primaryEmail = emailsResponse.data.find((email: any) => email.primary)?.email || emailsResponse.data[0]?.email;
-    
-    const user = {
-      id: userResponse.data.id.toString(),
-      name: userResponse.data.name || userResponse.data.login,
-      email: primaryEmail || userResponse.data.email,
-      avatarUrl: userResponse.data.avatar_url,
-      githubUsername: userResponse.data.login,
-      githubToken: access_token,
-    };
-    
-    // In a real app, you would save the user to the database here
-    
-    // Check if this is a new user (in a real app, you would check your database)
-    const isNewUser = true; // Placeholder, replace with actual logic
-    
-    // Create JWT
-    const token = jwt.sign(user, JWT_SECRET, { expiresIn: '24h' });
-    
-    // Clean up state
-    const { redirectUri } = storedState;
-    delete oauthStateStore[state as string];
-    
-    // Redirect back to the frontend with the token (this approach should ONLY be used for local development)
-    // For production, consider using a secure cookie or a temporary code exchange approach
-    const redirectPath = isNewUser ? '/onboarding/welcome' : redirectUri;
-    return res.redirect(`${FRONTEND_URL}${redirectPath}?token=${token}`);
-  } catch (error) {
-    console.error('GitHub authentication error:', error);
-    return res.redirect(`${FRONTEND_URL}/login?error=authentication_failed`);
-  }
-});
-
-
-
-
-
-app.get('/api/auth/me', authenticateToken, (req, res) => {
-  // User is already attached to request by the middleware
-  res.json((req as any).user);
-});
-
-app.post('/api/auth/logout', (req, res) => {
-  // In a stateless JWT setup, the client is responsible for discarding the token
-  res.json({ success: true });
-});
 
 // Repository Routes
 app.get('/api/repositories/github', authenticateToken, async (req, res) => {

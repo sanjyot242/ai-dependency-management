@@ -19,7 +19,7 @@ interface ConfigOptions {
 
 const ConfigSetup: React.FC = () => {
   const navigate = useNavigate();
-  const { getToken } = useAuth();
+  const { isAuthenticated } = useAuth();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   
@@ -64,22 +64,17 @@ const ConfigSetup: React.FC = () => {
       setLoading(true);
       setError(null);
       
-      const token = getToken();
-      if (!token) {
+     
+      if (!isAuthenticated) {
         setError('Not authenticated');
         setLoading(false);
         return;
       }
       
       // Save configuration to backend
-      await axios.post(
-        `${API_URL}/onboarding/config`,
-        { config },
-        {
-          headers: {
-            Authorization: `Bearer ${token}`
-          }
-        }
+      await axios.post(`${API_URL}/onboarding/config`,{ config  },{
+        withCredentials: true
+      }
       );
       
       // Navigate to the final step

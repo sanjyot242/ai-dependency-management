@@ -20,7 +20,7 @@ interface Repository {
 
 const RepositorySelect: React.FC = () => {
   const navigate = useNavigate();
-  const { getToken } = useAuth();
+  const { isAuthenticated } = useAuth();
   const [repositories, setRepositories] = useState<Repository[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -33,18 +33,16 @@ const RepositorySelect: React.FC = () => {
     const fetchRepositories = async () => {
       try {
         setLoading(true);
-        const token = getToken();
+        // const token = getToken();
         
-        if (!token) {
+        if (!isAuthenticated) {
           setError('Not authenticated');
           setLoading(false);
           return;
         }
         
         const response = await axios.get(`${API_URL}/repositories/github`, {
-          headers: {
-            Authorization: `Bearer ${token}`
-          }
+         withCredentials: true
         });
         
         if (response.status === 200) {
@@ -71,7 +69,7 @@ const RepositorySelect: React.FC = () => {
     };
     
     fetchRepositories();
-  }, [API_URL, getToken]);
+  }, [API_URL, isAuthenticated]);
 
   // Filter repositories based on search term
   const filteredRepositories = repositories.filter(repo =>
@@ -101,7 +99,7 @@ const RepositorySelect: React.FC = () => {
   // Continue to the next step
   const handleContinue = async () => {
     try {
-      const token = getToken();
+      // const token = getToken();
       const selectedRepos = repositories
         .filter(repo => repo.selected)
         .map(repo => ({
@@ -115,9 +113,7 @@ const RepositorySelect: React.FC = () => {
         `${API_URL}/onboarding/repositories`,
         { repositories: selectedRepos },
         {
-          headers: {
-            Authorization: `Bearer ${token}`
-          }
+          withCredentials: true
         }
       );
       

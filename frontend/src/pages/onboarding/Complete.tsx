@@ -15,7 +15,7 @@ interface InitializationStatus {
 
 const Complete: React.FC = () => {
   const navigate = useNavigate();
-  const { getToken } = useAuth();
+  const { isAuthenticated } = useAuth();
   const [status, setStatus] = useState<InitializationStatus>({
     repositoriesInitialized: false,
     configInitialized: false,
@@ -29,17 +29,15 @@ const Complete: React.FC = () => {
   useEffect(() => {
     const checkInitializationStatus = async () => {
       try {
-        const token = getToken();
-        if (!token) {
+        // const token = getToken();
+        if (!isAuthenticated) {
           setError('Not authenticated');
           setLoading(false);
           return;
         }
         
         const response = await axios.get(`${API_URL}/onboarding/status`, {
-          headers: {
-            Authorization: `Bearer ${token}`
-          }
+          withCredentials: true
         });
         
         if (response.status === 200) {
@@ -65,7 +63,7 @@ const Complete: React.FC = () => {
     };
     
     checkInitializationStatus();
-  }, [API_URL, getToken]);
+  }, [API_URL, isAuthenticated]);
 
   const handleContinue = () => {
     navigate('/dashboard');

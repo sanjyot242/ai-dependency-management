@@ -18,13 +18,12 @@ interface AuthContextType {
   user: User | null;
   login: (redirectUri?: string) => void;
   logout: () => void;
-  getToken: () => string | null;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 // API base URL - should come from environment variables
-const API_URL = 'http://localhost:3001/api';
+const API_URL =  'http://localhost:3001/api';
 
 export const AuthContextProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
@@ -33,54 +32,43 @@ export const AuthContextProvider: React.FC<{ children: React.ReactNode }> = ({ c
   const navigate = useNavigate();
   const location = useLocation();
 
+  // Check if the user has the is_authenticated cookie
+  const checkAuthCookie = (): boolean => {
+    // This cookie is not HTTP-only so JavaScript can read it
+    return document.cookie.includes('is_authenticated=true');
+  };
+
   // Initialize auth state on component mount and when URL changes
   useEffect(() => {
     const checkAuthStatus = async () => {
       try {
-        // Check for token in URL params (from OAuth redirect)
-        const queryParams = new URLSearchParams(window.location.search);
-        const tokenFromUrl = queryParams.get('token');
+        setIsLoading(true);
         
-        if (tokenFromUrl) {
-          // Store the token
-          localStorage.setItem('auth_token', tokenFromUrl);
-          
-          // Clean up the URL by removing the token parameter
-          const cleanUrl = window.location.pathname;
-          window.history.replaceState({}, document.title, cleanUrl);
-          
-          // Don't need to fetch user info again as we'll do it below
-        }
+        // Check if the user has the authentication cookie
+        const hasAuthCookie = checkAuthCookie();
         
-        // Check for existing token in storage
-        const token = localStorage.getItem('auth_token');
-        
-        if (!token) {
+        if (!hasAuthCookie) {
           setIsAuthenticated(false);
           setUser(null);
           setIsLoading(false);
           return;
         }
         
-        // Verify token and get user data
+        // Verify token by making a request to /auth/me
+        // The HTTP-only cookie will be sent automatically
         const response = await axios.get(`${API_URL}/auth/me`, {
-          headers: {
-            Authorization: `Bearer ${token}`
-          }
+          withCredentials: true // Important: this tells axios to send cookies
         });
         
         if (response.status === 200) {
           setUser(response.data);
           setIsAuthenticated(true);
         } else {
-          // Token is invalid
-          localStorage.removeItem('auth_token');
           setIsAuthenticated(false);
           setUser(null);
         }
       } catch (error) {
         console.error('Auth check failed:', error);
-        localStorage.removeItem('auth_token');
         setIsAuthenticated(false);
         setUser(null);
       } finally {
@@ -96,7 +84,8 @@ export const AuthContextProvider: React.FC<{ children: React.ReactNode }> = ({ c
     try {
       // Get the OAuth URL from our backend
       const response = await axios.get(`${API_URL}/auth/github/login`, {
-        params: { redirectUri }
+        params: { redirectUri },
+        withCredentials: true
       });
       
       // Redirect to the GitHub OAuth page
@@ -109,19 +98,17 @@ export const AuthContextProvider: React.FC<{ children: React.ReactNode }> = ({ c
   // Logout function
   const logout = async () => {
     try {
-      await axios.post(`${API_URL}/auth/logout`);
-      localStorage.removeItem('auth_token');
+      // The HTTP-only cookie will be sent automatically
+      await axios.post(`${API_URL}/auth/logout`, {}, {
+        withCredentials: true
+      });
+      
       setIsAuthenticated(false);
       setUser(null);
       navigate('/login');
     } catch (error) {
       console.error('Logout failed:', error);
     }
-  };
-
-  // Get auth token
-  const getToken = (): string | null => {
-    return localStorage.getItem('auth_token');
   };
 
   return (
@@ -131,8 +118,7 @@ export const AuthContextProvider: React.FC<{ children: React.ReactNode }> = ({ c
         isLoading, 
         user, 
         login, 
-        logout,
-        getToken
+        logout
       }}
     >
       {children}

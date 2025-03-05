@@ -13,21 +13,8 @@ class ApiClient {
       headers: {
         'Content-Type': 'application/json',
       },
+      withCredentials: true, // Important: This ensures cookies are sent with requests
     });
-    
-    // Add request interceptor to include auth token
-    this.client.interceptors.request.use(
-      (config) => {
-        const token = localStorage.getItem('auth_token');
-        if (token) {
-          config.headers.Authorization = `Bearer ${token}`;
-        }
-        return config;
-      },
-      (error) => {
-        return Promise.reject(error);
-      }
-    );
     
     // Add response interceptor to handle common errors
     this.client.interceptors.response.use(
@@ -37,7 +24,7 @@ class ApiClient {
       (error) => {
         // Handle 401 Unauthorized errors (token expired)
         if (error.response?.status === 401) {
-          localStorage.removeItem('auth_token');
+          // Redirect to login page on auth errors
           window.location.href = '/login';
         }
         return Promise.reject(error);
