@@ -1,129 +1,123 @@
-// web/src/contexts/AuthContext.tsx
+// contexts/AuthContext.tsx
 
-import React, { createContext, useContext, useState, useEffect } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import React, {
+  createContext,
+  useContext,
+  useState,
+  useEffect,
+  ReactNode,
+} from 'react';
+import axios from 'axios';
 
-import apiClient from '../api';
+const API_URL = 'http://localhost:3001/api';
 
 interface User {
   id: string;
-  name: string;
-  email: string;
-  avatarUrl: string;
-  githubUsername?: string;
+  username: string;
+  name?: string;
+  email?: string;
+  avatarUrl?: string;
+  isOnboarded: boolean;
 }
 
 interface AuthContextType {
+  user: User | null;
   isAuthenticated: boolean;
   isLoading: boolean;
-  user: User | null;
-  login: (redirectUri?: string) => void;
-  logout: () => void;
+  login: (redirectPath?: string) => Promise<void>;
+  logout: () => Promise<void>;
+  fetchUser: () => Promise<User | null>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-
-
-export const AuthContextProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
-  const [isLoading, setIsLoading] = useState<boolean>(true);
+export const AuthContextProvider: React.FC<{ children: ReactNode }> = ({
+  children,
+}) => {
   const [user, setUser] = useState<User | null>(null);
-  const navigate = useNavigate();
-  const location = useLocation();
+  const [isLoading, setIsLoading] = useState(true);
 
-  // Check if the user has the is_authenticated cookie
-  const checkAuthCookie = (): boolean => {
-    // This cookie is not HTTP-only so JavaScript can read it
-    return document.cookie.includes('is_authenticated=true');
-  };
+  // Create an axios instance with credentials enabled
+  const api = axios.create({
+    baseURL: API_URL,
+    withCredentials: true, // Important for cookies
+  });
 
-  // Initialize auth state on component mount and when URL changes
-  useEffect(() => {
-    const checkAuthStatus = async () => {
-      try {
-        setIsLoading(true);
-        
-        // Check if the user has the authentication cookie
-        const hasAuthCookie = checkAuthCookie();
-        
-        if (!hasAuthCookie) {
-          setIsAuthenticated(false);
-          setUser(null);
-          setIsLoading(false);
-          return;
-        }
-        
-        // Verify token by making a request to /auth/me
-        // The HTTP-only cookie will be sent automatically
-        const response = await apiClient.getCurrentUser();
-        
-        if (response.status === 200) {
-          setUser(response.data);
-          setIsAuthenticated(true);
-        } else {
-          setIsAuthenticated(false);
-          setUser(null);
-        }
-      } catch (error) {
-        console.error('Auth check failed:', error);
-        setIsAuthenticated(false);
-        setUser(null);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-    
-    checkAuthStatus();
-  }, [location]);
-
-  // Login function - redirects to server-side GitHub OAuth
-  const login = async (redirectUri: string = window.location.pathname) => {
+  const fetchUser = async (): Promise<User | null> => {
     try {
-      // Get the OAuth URL from our backend
-      const response = await apiClient.getAuthUrl(redirectUri);
-      
-      // Redirect to the GitHub OAuth page
-      window.location.href = response.data.authUrl;
+      const response = await api.get('/auth/me');
+
+      if (response.status === 200) {
+        setUser(response.data);
+        return response.data;
+      }
+
+      return null;
     } catch (error) {
-      console.error('Failed to initiate GitHub login:', error);
+      console.error('Error fetching user:', error);
+      setUser(null);
+      return null;
+    } finally {
+      setIsLoading(false);
     }
   };
 
-  // Logout function
-  const logout = async () => {
+  useEffect(() => {
+    fetchUser();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const login = async (redirectPath = '/dashboard'): Promise<void> => {
     try {
-      // The HTTP-only cookie will be sent automatically
-      await apiClient.logout();
-      
-      setIsAuthenticated(false);
-      setUser(null);
-      navigate('/login');
+      // Store the redirect path for after login
+      localStorage.setItem('auth_redirect', redirectPath);
+
+      // Get the GitHub OAuth URL from the backend
+      const response = await api.get('/auth/github/login');
+
+      if (response.status === 200 && response.data.authUrl) {
+        // Redirect to the GitHub OAuth URL
+        window.location.href = response.data.authUrl;
+      } else {
+        console.error('Invalid response from auth server:', response);
+        throw new Error('Failed to initiate GitHub login');
+      }
     } catch (error) {
-      console.error('Logout failed:', error);
+      console.error('Error initiating GitHub login:', error);
+      throw error;
+    }
+  };
+
+  const logout = async (): Promise<void> => {
+    try {
+      await api.post('/auth/logout');
+      setUser(null);
+    } catch (error) {
+      console.error('Error during logout:', error);
     }
   };
 
   return (
-    <AuthContext.Provider 
-      value={{ 
-        isAuthenticated, 
-        isLoading, 
-        user, 
-        login, 
-        logout
-      }}
-    >
+    <AuthContext.Provider
+      value={{
+        user,
+        isAuthenticated: !!user,
+        isLoading,
+        login,
+        logout,
+        fetchUser,
+      }}>
       {children}
     </AuthContext.Provider>
   );
 };
 
-// Custom hook for using the auth context
 export const useAuth = (): AuthContextType => {
   const context = useContext(AuthContext);
+
   if (context === undefined) {
     throw new Error('useAuth must be used within an AuthProvider');
   }
+
   return context;
 };
