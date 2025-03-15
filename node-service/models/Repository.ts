@@ -1,6 +1,7 @@
 import mongoose from 'mongoose';
 
 export interface IRepository extends mongoose.Document {
+  _id: mongoose.Types.ObjectId;
   userId: mongoose.Types.ObjectId;
   githubId: string;
   name: string;

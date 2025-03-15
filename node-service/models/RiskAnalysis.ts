@@ -2,6 +2,7 @@
 import mongoose, { Document, Schema, Types } from 'mongoose';
 
 export interface IRiskAnalysis extends Document {
+  _id: Types.ObjectId;
   userId: Types.ObjectId;
   repositoryId: Types.ObjectId;
   packageName: string;

@@ -19,6 +19,7 @@ export interface INotificationPreferences {
 }
 
 export interface IOnboardingConfig extends Document {
+  _id: Types.ObjectId;
   userId: Types.ObjectId;
   scanFrequency: 'daily' | 'weekly' | 'monthly';
   notificationPreferences: INotificationPreferences;

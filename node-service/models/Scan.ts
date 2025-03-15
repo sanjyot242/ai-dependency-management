@@ -14,9 +14,12 @@ export interface IDependency {
   latestVersion?: string;
   isOutdated: boolean;
   vulnerabilities?: IVulnerability[];
+  filePath?: string;
+  dependencyType?: string;
 }
 
 export interface IScan extends Document {
+  _id: Types.ObjectId;
   repositoryId: Types.ObjectId;
   userId: Types.ObjectId;
   status: 'pending' | 'in-progress' | 'completed' | 'failed';
@@ -66,6 +69,11 @@ const DependencySchema = new Schema<IDependency>({
     default: false,
   },
   vulnerabilities: [VulnerabilitySchema],
+  filePath: String,
+  dependencyType: {
+    type: String,
+    enum: ['dependencies', 'devDependencies', 'peerDependencies'],
+  },
 });
 
 const ScanSchema = new Schema<IScan>({
