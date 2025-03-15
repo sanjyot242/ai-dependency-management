@@ -5,6 +5,7 @@ import OnboardingConfig, {
 import User from '../models/User';
 import Repository from '../models/Repository';
 import { updateUserOnboardingStatus } from './user.service';
+import { scanScheduler } from './scan-scheduler.service';
 
 interface OnboardingConfigInput {
   scanFrequency?: 'daily' | 'weekly' | 'monthly';
@@ -78,6 +79,11 @@ export const saveOnboardingConfig = async (
 
     // Update user onboarded status
     await updateUserOnboardingStatus(userId, true);
+
+    // Update scan schedule based on new configuration
+    console.log('running in test mode');
+
+    await scanScheduler.scheduleForUser(userId, undefined, true);
 
     return config;
   } catch (error) {

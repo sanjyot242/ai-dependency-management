@@ -151,6 +151,10 @@ const apiClient = {
     return api.get(`/dependencies/repo/${repoId}/vulnerabilities`);
   },
 
+  getCurrentRepositoryScan(repoId: string) {
+    return axios.get(`/api/dependencies/repo/${repoId}/current-scan`);
+  },
+
   analyzeUpdateRisk: async (
     repoId: string,
     packageName: string,

@@ -1,5 +1,3 @@
-// web/src/pages/dashboard/Dashboard.tsx
-
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import apiClient from '../../api';
@@ -11,6 +9,8 @@ interface Repository {
   lastScanDate?: string;
   outdatedDependencies: number;
   vulnerabilities: number;
+  scanStatus?: 'pending' | 'in-progress' | 'completed' | 'failed' | 'no_scan';
+  errorMessage?: string;
 }
 
 const Dashboard: React.FC = () => {
@@ -18,6 +18,12 @@ const Dashboard: React.FC = () => {
   const [repositories, setRepositories] = useState<Repository[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [refreshCounter, setRefreshCounter] = useState(0);
+
+  // Add a function to refresh the dashboard
+  const refreshDashboard = () => {
+    setRefreshCounter((prev) => prev + 1);
+  };
 
   useEffect(() => {
     const fetchRepositoriesAndScans = async () => {
@@ -33,21 +39,26 @@ const Dashboard: React.FC = () => {
 
         const repos = repoResponse.data;
 
-        // For each repository, get the latest scan if available
+        // For each repository, get the current scan status
         const reposWithScanData = await Promise.all(
           repos.map(async (repo: any) => {
             try {
-              const scanResponse = await apiClient.getLatestRepositoryScan(
+              // Use current-scan endpoint instead of latest-scan
+              const scanResponse = await apiClient.getCurrentRepositoryScan(
                 repo._id
               );
+
+              const scanData = scanResponse.data;
 
               return {
                 id: repo._id,
                 name: repo.name,
                 fullName: repo.fullName,
-                lastScanDate: scanResponse.data?.completedAt,
-                outdatedDependencies: scanResponse.data?.outdatedCount || 0,
-                vulnerabilities: scanResponse.data?.vulnerabilityCount || 0,
+                lastScanDate: scanData.completedAt,
+                outdatedDependencies: scanData.outdatedCount || 0,
+                vulnerabilities: scanData.vulnerabilityCount || 0,
+                scanStatus: scanData.status || 'no_scan',
+                errorMessage: scanData.errorMessage,
               };
             } catch (err) {
               // If there's no scan data, return repo with default values
@@ -57,6 +68,7 @@ const Dashboard: React.FC = () => {
                 fullName: repo.fullName,
                 outdatedDependencies: 0,
                 vulnerabilities: 0,
+                scanStatus: 'no_scan',
               };
             }
           })
@@ -72,15 +84,64 @@ const Dashboard: React.FC = () => {
     };
 
     fetchRepositoriesAndScans();
-  }, []);
+
+    // Set up polling for in-progress scans
+    const pollingInterval = setInterval(() => {
+      const hasInProgressScans = repositories.some(
+        (repo) =>
+          repo.scanStatus === 'pending' || repo.scanStatus === 'in-progress'
+      );
+
+      if (hasInProgressScans) {
+        fetchRepositoriesAndScans();
+      }
+    }, 5000); // Poll every 5 seconds
+
+    return () => clearInterval(pollingInterval);
+  }, [refreshCounter]); // Depend on refreshCounter to trigger re-fetch
 
   const handleScanNow = async (repoId: string) => {
     try {
       await apiClient.initiateRepositoryScan(repoId);
-      // Show success message or update UI as needed
+      // Refresh to show updated status
+      refreshDashboard();
     } catch (error) {
       console.error('Error initiating scan:', error);
       // Show error message
+    }
+  };
+
+  // Function to render scan status
+  const renderScanStatus = (repo: Repository) => {
+    if (repo.scanStatus === 'pending') {
+      return (
+        <div className='flex items-center'>
+          <div className='mr-2 animate-pulse w-2 h-2 bg-yellow-500 rounded-full'></div>
+          <span className='text-sm text-yellow-600'>Scan pending</span>
+        </div>
+      );
+    } else if (repo.scanStatus === 'in-progress') {
+      return (
+        <div className='flex items-center'>
+          <div className='mr-2 animate-spin w-2 h-2 border border-blue-500 border-t-transparent rounded-full'></div>
+          <span className='text-sm text-blue-600'>Scanning...</span>
+        </div>
+      );
+    } else if (repo.scanStatus === 'failed') {
+      return (
+        <div className='flex items-center'>
+          <div className='mr-2 w-2 h-2 bg-red-500 rounded-full'></div>
+          <span className='text-sm text-red-600'>Scan failed</span>
+        </div>
+      );
+    } else if (repo.scanStatus === 'completed' && repo.lastScanDate) {
+      return (
+        <div className='text-sm text-gray-500'>
+          {new Date(repo.lastScanDate).toLocaleDateString()}
+        </div>
+      );
+    } else {
+      return <div className='text-sm text-gray-500'>Never</div>;
     }
   };
 
@@ -107,9 +168,16 @@ const Dashboard: React.FC = () => {
 
       <main className='max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8'>
         <div className='bg-white shadow rounded-lg p-6'>
-          <h2 className='text-xl font-semibold text-gray-800 mb-6'>
-            Your Repositories
-          </h2>
+          <div className='flex justify-between items-center mb-6'>
+            <h2 className='text-xl font-semibold text-gray-800'>
+              Your Repositories
+            </h2>
+            <button
+              onClick={refreshDashboard}
+              className='px-3 py-1 text-sm bg-gray-200 text-gray-700 rounded hover:bg-gray-300 transition-colors'>
+              Refresh
+            </button>
+          </div>
 
           {loading ? (
             <div className='flex justify-center py-8'>
@@ -174,11 +242,7 @@ const Dashboard: React.FC = () => {
                         </div>
                       </td>
                       <td className='px-6 py-4 whitespace-nowrap'>
-                        <div className='text-sm text-gray-500'>
-                          {repo.lastScanDate
-                            ? new Date(repo.lastScanDate).toLocaleDateString()
-                            : 'Never'}
-                        </div>
+                        {renderScanStatus(repo)}
                       </td>
                       <td className='px-6 py-4 whitespace-nowrap'>
                         <span
@@ -210,8 +274,22 @@ const Dashboard: React.FC = () => {
                         </button>
                         <button
                           className='text-indigo-600 hover:text-indigo-900'
-                          onClick={() => handleScanNow(repo.id)}>
-                          Scan Now
+                          onClick={() => handleScanNow(repo.id)}
+                          disabled={
+                            repo.scanStatus === 'pending' ||
+                            repo.scanStatus === 'in-progress'
+                          }
+                          style={{
+                            opacity:
+                              repo.scanStatus === 'pending' ||
+                              repo.scanStatus === 'in-progress'
+                                ? 0.5
+                                : 1,
+                          }}>
+                          {repo.scanStatus === 'pending' ||
+                          repo.scanStatus === 'in-progress'
+                            ? 'Scanning...'
+                            : 'Scan Now'}
                         </button>
                       </td>
                     </tr>
