@@ -5,6 +5,7 @@ import {
   initiateAutomaticScan,
 } from '../services/dependency-scan.service';
 import { scanScheduler } from '../services/scan-scheduler.service';
+import vulnerabilityScanService from '../services/vulnerability-scan.service';
 import {
   createScan,
   getLatestScan,
@@ -12,6 +13,7 @@ import {
 } from '../services/scan.service';
 import Scan from '../models/Scan';
 import User from '../models/User';
+import logger from '../utils/logger';
 
 interface CreatePRRequestBody {
   scanId: string;
@@ -29,6 +31,7 @@ const dependencyScanController = {
     try {
       const userId = req.user!.id;
       const { repoId } = req.body;
+      const includeVulnerabilities = req.body.includeVulnerabilities !== false; // Default to true
 
       if (!repoId) {
         res.status(400).json({ error: 'Repository ID is required' });
@@ -50,7 +53,7 @@ const dependencyScanController = {
 
       // Don't await this - it will run in the background
       scanService
-        .scanRepository(repoId, scan._id.toString())
+        .fullRepositoryScan(repoId, scan._id.toString(), includeVulnerabilities)
         .then(async (completedScan) => {
           if (
             completedScan &&
@@ -63,6 +66,15 @@ const dependencyScanController = {
               repoId
             );
           }
+
+          // Log vulnerability findings
+          if (completedScan && completedScan.vulnerabilityCount > 0) {
+            console.log(
+              `Scan completed with ${completedScan.vulnerabilityCount} vulnerabilities ` +
+                `(${completedScan.highSeverityCount} high severity) for repository ${repoId} ` +
+                `using OSV vulnerability database`
+            );
+          }
         })
         .catch((error) => {
           console.error('Error in scan process:', error);
@@ -72,6 +84,8 @@ const dependencyScanController = {
         success: true,
         message: 'Scan initiated',
         scanId: scan._id,
+        willScanVulnerabilities: includeVulnerabilities,
+        vulnerabilityProvider: 'OSV',
       });
     } catch (error) {
       console.error('Error initiating scan:', error);
@@ -292,10 +306,13 @@ const dependencyScanController = {
     res: Response
   ): Promise<void> => {
     try {
+      logger.info('Getting current scan for repository');
       const userId = req.user!.id;
       const { repoId } = req.params;
 
-      // Convert IDs to ObjectId
+      logger.info('User ID:', { userId });
+      logger.info('Repository ID:', { repoId });
+      //Convert IDs to ObjectId
       // const objectUserId = toObjectId(userId);
       // const objectRepoId = toObjectId(repoId);
 
@@ -307,6 +324,7 @@ const dependencyScanController = {
 
       if (!currentScan) {
         // No scan exists yet - return appropriate response with 200 status
+        logger.info('No scan found for repository:', { repoId });
         res.json({
           status: 'no_scan',
           message: 'No scan has been initiated for this repository yet',
@@ -314,6 +332,8 @@ const dependencyScanController = {
         });
         return;
       }
+
+      logger.info('Current scan found:', currentScan);
 
       // Return scan information
       res.json({
@@ -333,6 +353,145 @@ const dependencyScanController = {
     } catch (error) {
       console.error('Error fetching current scan:', error);
       res.status(500).json({ error: 'Failed to fetch current scan' });
+    }
+  },
+
+  initiateVulnerabilityScan: async (
+    req: Request,
+    res: Response
+  ): Promise<void> => {
+    try {
+      const userId = req.user!.id;
+      const { scanId } = req.body;
+
+      if (!scanId) {
+        res.status(400).json({ error: 'Scan ID is required' });
+        return;
+      }
+
+      // Verify the scan exists and belongs to user
+      const scan = await Scan.findOne({ _id: scanId, userId });
+      if (!scan) {
+        res.status(404).json({ error: 'Scan not found' });
+        return;
+      }
+
+      if (scan.status !== 'completed') {
+        res.status(400).json({
+          error: 'Scan must be in completed state to check vulnerabilities',
+        });
+        return;
+      }
+
+      // Get scan options from request
+      const options = {
+        quickScan: req.body.quickScan === true,
+        excludeDevDependencies: req.body.excludeDevDependencies === true,
+        excludeHighRiskOnly: req.body.excludeHighRiskOnly === true,
+        batchSize: req.body.batchSize || 10,
+      };
+
+      // Start vulnerability scan in background
+      vulnerabilityScanService
+        .scanVulnerabilities(scanId, options)
+        .catch((error) => {
+          console.error('Error in vulnerability scan process:', error);
+        });
+
+      res.json({
+        success: true,
+        message: 'Vulnerability scan initiated using OSV database',
+        scanId,
+      });
+    } catch (error) {
+      console.error('Error initiating vulnerability scan:', error);
+      res.status(500).json({ error: 'Failed to initiate vulnerability scan' });
+    }
+  },
+
+  /**
+   * Get vulnerability summary for a scan
+   */
+  getVulnerabilitySummary: async (
+    req: Request,
+    res: Response
+  ): Promise<void> => {
+    try {
+      const userId = req.user!.id;
+      const { scanId } = req.params;
+
+      // Verify the scan exists and belongs to user
+      const scan = await Scan.findOne({ _id: scanId, userId });
+      if (!scan) {
+        res.status(404).json({ error: 'Scan not found' });
+        return;
+      }
+
+      // Check if scan has been completed
+      if (scan.status !== 'completed') {
+        res.status(400).json({
+          error: 'Vulnerability scanning has not been completed for this scan',
+        });
+        return;
+      }
+
+      // Get vulnerability summary
+      const summary = await vulnerabilityScanService.getVulnerabilitySummary(
+        scanId
+      );
+
+      res.json({
+        scanId,
+        ...summary,
+        scannedAt: scan.completedAt,
+        dataSource: 'OSV',
+      });
+    } catch (error) {
+      console.error('Error getting vulnerability summary:', error);
+      res.status(500).json({ error: 'Failed to get vulnerability summary' });
+    }
+  },
+
+  /**
+   * Get vulnerability details for a specific dependency
+   */
+  getDependencyVulnerabilities: async (
+    req: Request,
+    res: Response
+  ): Promise<void> => {
+    try {
+      const userId = req.user!.id;
+      const { scanId, packageName } = req.params;
+
+      // Verify the scan exists and belongs to user
+      const scan = await Scan.findOne({ _id: scanId, userId });
+      if (!scan) {
+        res.status(404).json({ error: 'Scan not found' });
+        return;
+      }
+
+      // Find the dependency
+      const dependency = scan.dependencies.find(
+        (dep) => dep.packageName === packageName
+      );
+
+      if (!dependency) {
+        res.status(404).json({ error: 'Dependency not found in scan' });
+        return;
+      }
+
+      res.json({
+        packageName: dependency.packageName,
+        currentVersion: dependency.currentVersion,
+        latestVersion: dependency.latestVersion,
+        vulnerabilities: dependency.vulnerabilities || [],
+        dataSource: 'OSV',
+      });
+    } catch (error) {
+      console.error('Error getting dependency vulnerabilities:', error);
+      res
+        .status(500)
+        .json({ error: 'Failed to get dependency vulnerabilities' });
     }
   },
 };

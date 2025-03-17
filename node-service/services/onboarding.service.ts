@@ -9,6 +9,7 @@ import { scanScheduler } from './scan-scheduler.service';
 
 interface OnboardingConfigInput {
   scanFrequency?: 'daily' | 'weekly' | 'monthly';
+  scanVulnerabilities?: boolean;
   notificationPreferences?: {
     email?: {
       enabled?: boolean;
@@ -32,6 +33,7 @@ interface OnboardingStatus {
   scanStarted: boolean;
 }
 
+// Update the saveOnboardingConfig function to include the new field:
 export const saveOnboardingConfig = async (
   userId: string,
   configData: OnboardingConfigInput
@@ -67,6 +69,11 @@ export const saveOnboardingConfig = async (
       if (configData.autoScanOnPush !== undefined) {
         config.autoScanOnPush = configData.autoScanOnPush;
       }
+
+      // Add the new field
+      if (configData.scanVulnerabilities !== undefined) {
+        config.scanVulnerabilities = configData.scanVulnerabilities;
+      }
     } else {
       // Create new config
       config = new OnboardingConfig({
@@ -81,9 +88,7 @@ export const saveOnboardingConfig = async (
     await updateUserOnboardingStatus(userId, true);
 
     // Update scan schedule based on new configuration
-    console.log('running in test mode');
-
-    await scanScheduler.scheduleForUser(userId, undefined, true);
+    await scanScheduler.scheduleForUser(userId, undefined, false);
 
     return config;
   } catch (error) {

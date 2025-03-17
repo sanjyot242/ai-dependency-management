@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import apiClient from '../../api';
+import VulnerabilityDetails from '../../components/VulnerabilityDetails';
 
 interface Repository {
   id: string;
@@ -11,6 +12,7 @@ interface Repository {
   vulnerabilities: number;
   scanStatus?: 'pending' | 'in-progress' | 'completed' | 'failed' | 'no_scan';
   errorMessage?: string;
+  currentScanId?: string;
 }
 
 const Dashboard: React.FC = () => {
@@ -19,10 +21,59 @@ const Dashboard: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [refreshCounter, setRefreshCounter] = useState(0);
+  const [scanning, setScanning] = useState<Record<string, boolean>>({});
+  const [vulnScanning, setVulnScanning] = useState<Record<string, boolean>>({});
+  const [selectedScanId, setSelectedScanId] = useState<string | null>(null);
+  const [showVulnerabilityModal, setShowVulnerabilityModal] = useState(false);
 
   // Add a function to refresh the dashboard
   const refreshDashboard = () => {
     setRefreshCounter((prev) => prev + 1);
+  };
+
+  const openVulnerabilityDetails = (scanId: string) => {
+    console.log('Opening vulnerability details for scan:', scanId);
+    setSelectedScanId(scanId);
+    setShowVulnerabilityModal(true);
+  };
+
+  const closeVulnerabilityDetails = () => {
+    setShowVulnerabilityModal(false);
+    setSelectedScanId(null);
+  };
+
+  const handleScanVulnerabilities = async (repoId: string, scanId: string) => {
+    if (!scanId) return;
+
+    try {
+      // Mark this repository as scanning for vulnerabilities
+      setVulnScanning((prev) => ({ ...prev, [repoId]: true }));
+
+      // Initiate vulnerability scan
+      await apiClient.initiateVulnerabilityScan(scanId);
+
+      // Start polling for scan completion
+      const pollingInterval = setInterval(async () => {
+        try {
+          const response = await apiClient.getCurrentRepositoryScan(repoId);
+          const scanData = response.data;
+
+          // If scan is completed, stop polling and refresh dashboard
+          if (scanData.status === 'completed') {
+            clearInterval(pollingInterval);
+            setVulnScanning((prev) => ({ ...prev, [repoId]: false }));
+            refreshDashboard();
+          }
+        } catch (error) {
+          console.error('Error polling scan status:', error);
+          clearInterval(pollingInterval);
+          setVulnScanning((prev) => ({ ...prev, [repoId]: false }));
+        }
+      }, 3000); // Check every 3 seconds
+    } catch (error) {
+      console.error('Error initiating vulnerability scan:', error);
+      setVulnScanning((prev) => ({ ...prev, [repoId]: false }));
+    }
   };
 
   useEffect(() => {
@@ -59,6 +110,7 @@ const Dashboard: React.FC = () => {
                 vulnerabilities: scanData.vulnerabilityCount || 0,
                 scanStatus: scanData.status || 'no_scan',
                 errorMessage: scanData.errorMessage,
+                currentScanId: scanData.id || null,
               };
             } catch (err) {
               // If there's no scan data, return repo with default values
@@ -69,6 +121,7 @@ const Dashboard: React.FC = () => {
                 outdatedDependencies: 0,
                 vulnerabilities: 0,
                 scanStatus: 'no_scan',
+                currentScanId: null,
               };
             }
           })
@@ -102,12 +155,27 @@ const Dashboard: React.FC = () => {
 
   const handleScanNow = async (repoId: string) => {
     try {
-      await apiClient.initiateRepositoryScan(repoId);
+      setScanning((prev) => ({ ...prev, [repoId]: true }));
+      const response = await apiClient.initiateRepositoryScan(repoId);
+
+      // Store the scan ID from the response
+      if (response.data && response.data.scanId) {
+        // Update repositories with current scan ID
+        setRepositories((prev) =>
+          prev.map((repo) =>
+            repo.id === repoId
+              ? { ...repo, currentScanId: response.data.scanId }
+              : repo
+          )
+        );
+      }
+
       // Refresh to show updated status
       refreshDashboard();
     } catch (error) {
       console.error('Error initiating scan:', error);
-      // Show error message
+    } finally {
+      setScanning((prev) => ({ ...prev, [repoId]: false }));
     }
   };
 
@@ -165,7 +233,6 @@ const Dashboard: React.FC = () => {
           </div>
         </div>
       </header>
-
       <main className='max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8'>
         <div className='bg-white shadow rounded-lg p-6'>
           <div className='flex justify-between items-center mb-6'>
@@ -272,25 +339,68 @@ const Dashboard: React.FC = () => {
                           }}>
                           View Details
                         </button>
+
                         <button
-                          className='text-indigo-600 hover:text-indigo-900'
+                          className='text-indigo-600 hover:text-indigo-900 mr-3'
                           onClick={() => handleScanNow(repo.id)}
                           disabled={
                             repo.scanStatus === 'pending' ||
-                            repo.scanStatus === 'in-progress'
+                            repo.scanStatus === 'in-progress' ||
+                            scanning[repo.id]
                           }
                           style={{
                             opacity:
                               repo.scanStatus === 'pending' ||
-                              repo.scanStatus === 'in-progress'
+                              repo.scanStatus === 'in-progress' ||
+                              scanning[repo.id]
                                 ? 0.5
                                 : 1,
                           }}>
                           {repo.scanStatus === 'pending' ||
-                          repo.scanStatus === 'in-progress'
+                          repo.scanStatus === 'in-progress' ||
+                          scanning[repo.id]
                             ? 'Scanning...'
                             : 'Scan Now'}
                         </button>
+
+                        <button
+                          className='text-green-600 hover:text-green-900 mr-3'
+                          onMouseOver={() => console.log('Mouse over button')}
+                          onClick={() => {
+                            alert('Button clicked for ' + repo.name);
+                            openVulnerabilityDetails(repo.currentScanId!);
+                          }}
+                          style={{
+                            opacity:
+                              repo.scanStatus !== 'completed' ||
+                              !repo.currentScanId ||
+                              repo.vulnerabilities === 0
+                                ? 0.5
+                                : 1,
+                          }}>
+                          View Vulnerabilities
+                        </button>
+
+                        {/* Only show vulnerability scan button if there's a completed scan */}
+                        {repo.scanStatus === 'completed' &&
+                          repo.currentScanId && (
+                            <button
+                              className='text-orange-600 hover:text-orange-900'
+                              onClick={() =>
+                                handleScanVulnerabilities(
+                                  repo.id,
+                                  repo.currentScanId!
+                                )
+                              }
+                              disabled={vulnScanning[repo.id]}
+                              style={{
+                                opacity: vulnScanning[repo.id] ? 0.5 : 1,
+                              }}>
+                              {vulnScanning[repo.id]
+                                ? 'OSV Scanning...'
+                                : 'Scan Vulnerabilities'}
+                            </button>
+                          )}
                       </td>
                     </tr>
                   ))}
@@ -300,6 +410,17 @@ const Dashboard: React.FC = () => {
           )}
         </div>
       </main>
+      {/* Vulnerability Modal */}
+      {showVulnerabilityModal && selectedScanId && (
+        <div className='fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4'>
+          <div className='w-full max-w-4xl max-h-[90vh] overflow-auto'>
+            <VulnerabilityDetails
+              scanId={selectedScanId}
+              onClose={closeVulnerabilityDetails}
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 };

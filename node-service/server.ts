@@ -6,6 +6,7 @@ import morgan from 'morgan';
 import bodyParser from 'body-parser';
 import cookieParser from 'cookie-parser';
 import path from 'path';
+import logger from './utils/logger';
 
 // Database connection
 import './db';
@@ -14,7 +15,7 @@ import './db';
 import authController from './controllers/auth.controller';
 import repositoryController from './controllers/repository.controller';
 import onboardingController from './controllers/onboarding.controller';
-import scanController from './controllers/scan.controller';
+// import scanController from './controllers/scan.controller';
 import dependencyScanController from './controllers/dependency-scan.controller';
 
 // Models for webhook handler
@@ -48,7 +49,14 @@ app.use(
     allowedHeaders: ['Content-Type', 'Authorization'],
   })
 );
-app.use(morgan('short'));
+app.use((req, res, next) => {
+  logger.info(`Incoming request: ${req.method} ${req.url}`, {
+    method: req.method,
+    url: req.url,
+    body: req.body,
+  });
+  next();
+});
 app.use(bodyParser.json());
 
 // Initialize scan scheduler
@@ -143,36 +151,36 @@ app.post(
 
 // Legacy scan routes - using scanController for existing APIs
 // These now work alongside the new controller for backward compatibility
-app.get(
-  '/api/dependencies/repo/:repoId/latest-scan',
-  authenticateToken,
-  scanController.getLatestRepositoryScan
-);
+// app.get(
+//   '/api/dependencies/repo/:repoId/latest-scan',
+//   authenticateToken,
+//   scanController.getLatestRepositoryScan
+// );
 app.get(
   '/api/dependencies/repo/:repoId/current-scan', // NEW: Added endpoint for current scan
   authenticateToken,
   dependencyScanController.getCurrentRepositoryScan
 );
-app.get(
-  '/api/dependencies/repo/:repoId/history',
-  authenticateToken,
-  scanController.getRepositoryScanHistory
-);
-app.get(
-  '/api/dependencies/repo/:repoId/vulnerabilities',
-  authenticateToken,
-  scanController.getRepositoryVulnerabilities
-);
-app.post(
-  '/api/dependencies/analyze-risk',
-  authenticateToken,
-  scanController.analyzeUpdateRisk
-);
-app.get(
-  '/api/dependencies/repo/:repoId/risk-analyses',
-  authenticateToken,
-  scanController.getRiskAnalyses
-);
+// app.get(
+//   '/api/dependencies/repo/:repoId/history',
+//   authenticateToken,
+//   scanController.getRepositoryScanHistory
+// );
+// app.get(
+//   '/api/dependencies/repo/:repoId/vulnerabilities',
+//   authenticateToken,
+//   scanController.getRepositoryVulnerabilities
+// );
+// app.post(
+//   '/api/dependencies/analyze-risk',
+//   authenticateToken,
+//   scanController.analyzeUpdateRisk
+// );
+// app.get(
+//   '/api/dependencies/repo/:repoId/risk-analyses',
+//   authenticateToken,
+//   scanController.getRiskAnalyses
+// );
 
 // // Test endpoint for debugging scan triggers
 // app.post('/api/test/trigger-scan', authenticateToken, async (req, res) => {
@@ -201,6 +209,22 @@ app.get(
 //     res.status(500).json({ error: 'Test failed' });
 //   }
 // });
+
+app.post(
+  '/api/vulnerabilities/scan',
+  authenticateToken,
+  dependencyScanController.initiateVulnerabilityScan
+);
+app.get(
+  '/api/vulnerabilities/summary/:scanId',
+  authenticateToken,
+  dependencyScanController.getVulnerabilitySummary
+);
+app.get(
+  '/api/vulnerabilities/dependency/:scanId/:packageName',
+  authenticateToken,
+  dependencyScanController.getDependencyVulnerabilities
+);
 
 app.post('/api/test/schedule-test', authenticateToken, async (req, res) => {
   try {

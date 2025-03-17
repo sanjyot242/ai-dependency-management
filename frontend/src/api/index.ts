@@ -152,7 +152,8 @@ const apiClient = {
   },
 
   getCurrentRepositoryScan(repoId: string) {
-    return axios.get(`/api/dependencies/repo/${repoId}/current-scan`);
+    console.log('apiClient.getCurrentRepositoryScan');
+    return api.get(`/dependencies/repo/${repoId}/current-scan`);
   },
 
   analyzeUpdateRisk: async (
@@ -167,6 +168,23 @@ const apiClient = {
       currentVersion,
       newVersion,
     });
+  },
+
+  initiateVulnerabilityScan: async (scanId: string, options = {}) => {
+    return api.post('/vulnerabilities/scan', {
+      scanId,
+      ...options,
+    });
+  },
+
+  // Get vulnerability summary for a scan
+  getVulnerabilitySummary: async (scanId: string) => {
+    return api.get(`/vulnerabilities/summary/${scanId}`);
+  },
+
+  // Get detailed vulnerabilities for a specific package
+  getDependencyVulnerabilities: async (scanId: string, packageName: string) => {
+    return api.get(`/vulnerabilities/dependency/${scanId}/${packageName}`);
   },
 };
 

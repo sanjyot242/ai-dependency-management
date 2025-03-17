@@ -8,6 +8,8 @@ import OnboardingConfig, {
   IOnboardingConfig,
 } from '../models/OnboardingConfig';
 
+import vulnerabilityScanService from './vulnerability-scan.service';
+
 // SemVer parser
 const semver = require('semver');
 
@@ -619,6 +621,47 @@ export class DependencyScanService {
       throw new Error('Failed to create pull request for dependency updates');
     }
   }
+
+  /**
+   * Runs a full scan for a repository, including dependencies and vulnerabilities
+   */
+  public async fullRepositoryScan(
+    repoId: string,
+    scanId: string,
+    includeVulnerabilities: boolean = true
+  ): Promise<IScan | null> {
+    try {
+      // First perform the regular dependency scan
+      const completedScan = await this.scanRepository(repoId, scanId);
+
+      // If the scan completed successfully and vulnerability scanning is requested
+      if (
+        completedScan &&
+        completedScan.status === 'completed' &&
+        includeVulnerabilities
+      ) {
+        console.log(
+          `Dependency scan completed for ${repoId}, starting OSV vulnerability scan...`
+        );
+
+        try {
+          // Perform vulnerability scanning using OSV
+          return await vulnerabilityScanService.scanVulnerabilities(scanId, {
+            batchSize: 20, // Use a larger batch size for better performance
+          });
+        } catch (vulnError) {
+          console.error('Error in OSV vulnerability scanning:', vulnError);
+          // Even if vulnerability scanning fails, we still return the completed dependency scan
+          return completedScan;
+        }
+      }
+
+      return completedScan;
+    } catch (error) {
+      console.error('Error in fullRepositoryScan:', error);
+      throw error;
+    }
+  }
 }
 
 /**
@@ -640,7 +683,8 @@ export const getUserScanConfig = async (
  */
 export const initiateAutomaticScan = async (
   userId: string,
-  githubToken: string
+  githubToken: string,
+  includeVulnerabilities: boolean = true
 ): Promise<Record<string, string>> => {
   try {
     // Get user scan configuration
@@ -676,7 +720,11 @@ export const initiateAutomaticScan = async (
 
       // Start scan process (in background)
       scanService
-        .scanRepository(repo._id.toString(), scan._id.toString())
+        .fullRepositoryScan(
+          repo._id.toString(),
+          scan._id.toString(),
+          includeVulnerabilities
+        )
         .then(async (completedScan) => {
           if (
             completedScan &&
@@ -688,6 +736,15 @@ export const initiateAutomaticScan = async (
               completedScan._id.toString(),
               repo._id.toString()
             );
+          }
+
+          // If high severity vulnerabilities are found, log them
+          if (completedScan && completedScan.highSeverityCount > 0) {
+            console.log(
+              `WARNING: ${completedScan.highSeverityCount} high severity vulnerabilities found in ${repo.name} using OSV database`
+            );
+
+            // Here you could add code to send notifications or create issues for vulnerabilities
           }
         })
         .catch((error) => {
