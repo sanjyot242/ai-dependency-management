@@ -23,6 +23,7 @@ export interface IOnboardingConfig extends Document {
   userId: Types.ObjectId;
   scanFrequency: 'daily' | 'weekly' | 'monthly';
   notificationPreferences: INotificationPreferences;
+  scanVulnerabilities?: boolean;
   autoScanOnPush: boolean;
   createdAt: Date;
   updatedAt: Date;
@@ -35,6 +36,7 @@ const OnboardingConfigSchema = new Schema<IOnboardingConfig>({
     required: true,
     unique: true,
   },
+  scanVulnerabilities: { type: Boolean, default: true },
   scanFrequency: {
     type: String,
     enum: ['daily', 'weekly', 'monthly'],
