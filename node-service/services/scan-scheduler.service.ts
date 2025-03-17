@@ -157,14 +157,23 @@ export class ScanSchedulerService {
         throw new Error('User does not have a GitHub token');
       }
 
+      // Get user config to check vulnerability scanning preference
+      const config = await OnboardingConfig.findOne({ userId: user._id });
+      const includeVulnerabilities =
+        !config || config.scanVulnerabilities !== false; // Default to true
+
       // Run scan
       const results = await initiateAutomaticScan(
         user._id.toString(),
-        user.githubToken
+        user.githubToken,
+        includeVulnerabilities
       );
 
       console.log(
-        `Started ${Object.keys(results).length} scans for user ${user._id}`
+        `Started ${Object.keys(results).length} scans for user ${user._id}` +
+          (includeVulnerabilities
+            ? ' with OSV vulnerability scanning'
+            : ' without vulnerability scanning')
       );
     } catch (error) {
       console.error(`Error running scan for user ${user._id}:`, error);
