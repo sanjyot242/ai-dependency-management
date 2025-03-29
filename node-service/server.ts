@@ -2,31 +2,29 @@
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
-import morgan from 'morgan';
 import bodyParser from 'body-parser';
 import cookieParser from 'cookie-parser';
 import path from 'path';
 import logger from './utils/logger';
+import http from 'http';
 
 // Database connection
 import './db';
+
+// Initialize RabbitMQ
+import rabbitMQService from './services/rabbitmq.service';
 
 // Controllers
 import authController from './controllers/auth.controller';
 import repositoryController from './controllers/repository.controller';
 import onboardingController from './controllers/onboarding.controller';
-// import scanController from './controllers/scan.controller';
 import dependencyScanController from './controllers/dependency-scan.controller';
 
-// Models for webhook handler
-import Repository from './models/Repository';
-import OnboardingConfig from './models/OnboardingConfig';
-import User from './models/User';
-
-// Services
-import { createScan } from './services/scan.service';
-import { DependencyScanService } from './services/dependency-scan.service';
+// Initialize scan scheduler
+// The scheduler will automatically initialize when imported
 import { scanScheduler } from './services/scan-scheduler.service';
+import { initializeWebSocketService } from './services/websocket.service';
+import { QUEUE_WEBSOCKET_NOTIFICATION } from './services/rabbitmq.service';
 
 // Middleware
 import authenticateToken from './middleware/auth.middleware';
@@ -38,6 +36,16 @@ dotenv.config({ path: path.resolve(__dirname, '../.env') });
 const app = express();
 const PORT = process.env.PORT || 3001;
 const FRONTEND_URL = 'http://localhost:8080';
+
+// Create HTTP server
+const server = http.createServer(app);
+
+const webSocketService = initializeWebSocketService(server);
+
+// Initialize WebSocket service
+import websocketNotificationWorker from './services/workers/websocket-notification.worker';
+
+import { WorkerManager } from './services/workers/worker-manager';
 
 // Middleware setup
 app.use(cookieParser()); // Parse cookies
@@ -59,8 +67,11 @@ app.use((req, res, next) => {
 });
 app.use(bodyParser.json());
 
-// Initialize scan scheduler
-// The scheduler will automatically initialize when imported
+rabbitMQService.init().catch((err) => {
+  logger.error('Failed to initialize RabbitMQ:', err);
+  // Continue server startup even if RabbitMQ fails
+  // The service will attempt to reconnect later
+});
 
 // Health check
 app.get('/api/health', (req, res) => {
@@ -161,6 +172,8 @@ app.get(
   authenticateToken,
   dependencyScanController.getCurrentRepositoryScan
 );
+
+//TODO: Remove these legacy routes once the new controller is fully integrated
 // app.get(
 //   '/api/dependencies/repo/:repoId/history',
 //   authenticateToken,
@@ -226,6 +239,58 @@ app.get(
   dependencyScanController.getDependencyVulnerabilities
 );
 
+// First initialize WebSocket notification worker
+logger.info('Starting WebSocket notification worker');
+websocketNotificationWorker.start().catch((err) => {
+  logger.error('Failed to start websocket notification worker:', err);
+});
+
+// Then start other workers
+logger.info('Starting dependency scanner workers...');
+const workerManager = new WorkerManager();
+workerManager.start().catch((error) => {
+  logger.error('Error starting workers:', error);
+});
+
+// WebSocket test endpoint
+app.get('/api/ws-test', authenticateToken, async (req, res) => {
+  const userId = req.user!.id;
+
+  try {
+    // Send a test notification through the queue instead of directly
+    const success = await rabbitMQService.sendToQueue(
+      QUEUE_WEBSOCKET_NOTIFICATION,
+      {
+        type: 'test_message',
+        data: {
+          userId,
+          message: 'Test message from server',
+          timestamp: new Date().toISOString(),
+        },
+      }
+    );
+
+    if (success) {
+      res.json({
+        success: true,
+        message: 'Test message queued successfully',
+      });
+    } else {
+      res.status(500).json({
+        success: false,
+        message: 'Failed to queue test message',
+      });
+    }
+  } catch (error) {
+    logger.error('Error sending test message:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error processing test request',
+      error: error instanceof Error ? error.message : 'Unknown error',
+    });
+  }
+});
+
 app.post('/api/test/schedule-test', authenticateToken, async (req, res) => {
   try {
     const userId = req.user!.id;
@@ -245,8 +310,36 @@ app.post('/api/test/schedule-test', authenticateToken, async (req, res) => {
 });
 
 // Start server
-app.listen(PORT, () => {
+server.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
+});
+
+// Process termination handler for graceful shutdown
+process.on('SIGTERM', () => {
+  logger.info('SIGTERM received, shutting down gracefully');
+
+  server.close(() => {
+    logger.info('HTTP server closed');
+
+    // Close RabbitMQ connection
+    rabbitMQService
+      .close()
+      .catch((err) => {
+        logger.error('Error closing RabbitMQ connection:', err);
+      })
+      .finally(() => {
+        logger.info('Server shutdown complete');
+        process.exit(0);
+      });
+  });
+
+  // Force shutdown after 10 seconds if graceful shutdown fails
+  setTimeout(() => {
+    logger.error(
+      'Could not close connections in time, forcefully shutting down'
+    );
+    process.exit(1);
+  }, 10000);
 });
 
 export default app;

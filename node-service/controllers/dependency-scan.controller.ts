@@ -1,19 +1,19 @@
 // controllers/dependency-scan.controller.ts
 import { Request, Response } from 'express';
-import {
-  DependencyScanService,
-  initiateAutomaticScan,
-} from '../services/dependency-scan.service';
-import { scanScheduler } from '../services/scan-scheduler.service';
-import vulnerabilityScanService from '../services/vulnerability-scan.service';
-import {
-  createScan,
-  getLatestScan,
-  getScanHistory,
-} from '../services/scan.service';
+import { Types } from 'mongoose';
+import logger from '../utils/logger';
+import Repository from '../models/Repository';
 import Scan from '../models/Scan';
 import User from '../models/User';
-import logger from '../utils/logger';
+import scanProcessManager from '../services/scan-process-manager.service';
+import rabbitMQService, {
+  QUEUE_PR_CREATION,
+  QUEUE_VULNERABILITY_SCAN,
+} from '../services/rabbitmq.service';
+import { VulnerabilityScanMessage } from '../types/queue-messages.types';
+import { getLatestScan, getScanHistory } from '../services/scan.service';
+import { scanScheduler } from '../services/scan-scheduler.service';
+import vulnerabilityScanService from '../services/vulnerability-scan.service';
 
 interface CreatePRRequestBody {
   scanId: string;
@@ -22,7 +22,7 @@ interface CreatePRRequestBody {
 
 const dependencyScanController = {
   /**
-   * Initiate a manual scan for a repository
+   * Initiate a manual scan for a repository using the process manager
    */
   initiateRepositoryScan: async (
     req: Request,
@@ -32,64 +32,48 @@ const dependencyScanController = {
       const userId = req.user!.id;
       const { repoId } = req.body;
       const includeVulnerabilities = req.body.includeVulnerabilities !== false; // Default to true
+      const createPR = req.body.createPR !== false; // Default to true
 
       if (!repoId) {
         res.status(400).json({ error: 'Repository ID is required' });
         return;
       }
 
-      // Create scan record
-      const scan = await createScan(userId, repoId);
+      // Validate repository exists and user has access
+      const repository = await Repository.findOne({
+        _id: repoId,
+        userId,
+      });
 
-      // Get user's GitHub token
-      const user = await User.findById(userId);
-      if (!user || !user.githubToken) {
-        res.status(400).json({ error: 'GitHub token not found' });
+      if (!repository) {
+        res
+          .status(404)
+          .json({ error: 'Repository not found or access denied' });
         return;
       }
 
-      // Start scan in background
-      const scanService = new DependencyScanService(userId, user.githubToken);
+      // Use the process manager to initiate the scan
+      const scan = await scanProcessManager.initiateScan(userId, repoId, {
+        includeVulnerabilities,
+        createPR,
+      });
 
-      // Don't await this - it will run in the background
-      scanService
-        .fullRepositoryScan(repoId, scan._id.toString(), includeVulnerabilities)
-        .then(async (completedScan) => {
-          if (
-            completedScan &&
-            completedScan.status === 'completed' &&
-            completedScan.outdatedCount > 0
-          ) {
-            // Automatically create PR if outdated dependencies are found
-            await scanService.createDependencyUpdatePR(
-              completedScan._id.toString(),
-              repoId
-            );
-          }
-
-          // Log vulnerability findings
-          if (completedScan && completedScan.vulnerabilityCount > 0) {
-            console.log(
-              `Scan completed with ${completedScan.vulnerabilityCount} vulnerabilities ` +
-                `(${completedScan.highSeverityCount} high severity) for repository ${repoId} ` +
-                `using OSV vulnerability database`
-            );
-          }
-        })
-        .catch((error) => {
-          console.error('Error in scan process:', error);
-        });
-
-      res.json({
+      res.status(201).json({
         success: true,
-        message: 'Scan initiated',
+        message: 'Scan initiated successfully',
         scanId: scan._id,
+        status: scan.status,
+        state: scan.state,
         willScanVulnerabilities: includeVulnerabilities,
+        willCreatePR: createPR,
         vulnerabilityProvider: 'OSV',
       });
     } catch (error) {
-      console.error('Error initiating scan:', error);
-      res.status(500).json({ error: 'Failed to initiate scan' });
+      logger.error('Error initiating repository scan:', error);
+      res.status(500).json({
+        error: 'Failed to initiate scan',
+        details: error instanceof Error ? error.message : 'Unknown error',
+      });
     }
   },
 
@@ -102,16 +86,41 @@ const dependencyScanController = {
   ): Promise<void> => {
     try {
       const userId = req.user!.id;
+      const includeVulnerabilities = req.body.includeVulnerabilities !== false; // Default to true
+      const createPR = req.body.createPR !== false; // Default to true
 
-      // Get user's GitHub token
-      const user = await User.findById(userId);
-      if (!user || !user.githubToken) {
-        res.status(400).json({ error: 'GitHub token not found' });
+      // Get selected repositories
+      const repositories = await Repository.find({
+        userId,
+        isRepoSelected: true,
+      });
+
+      if (repositories.length === 0) {
+        res
+          .status(404)
+          .json({ error: 'No repositories selected for scanning' });
         return;
       }
 
-      // Start scans
-      const results = await initiateAutomaticScan(userId, user.githubToken);
+      // Initiate scans for all repositories
+      const results: Record<string, any> = {};
+
+      for (const repo of repositories) {
+        const scan = await scanProcessManager.initiateScan(
+          userId,
+          repo._id.toString(),
+          {
+            includeVulnerabilities,
+            createPR,
+          }
+        );
+
+        results[repo.name] = {
+          scanId: scan._id,
+          state: scan.state,
+          repoId: repo._id,
+        };
+      }
 
       res.json({
         success: true,
@@ -121,37 +130,64 @@ const dependencyScanController = {
         scans: results,
       });
     } catch (error) {
-      console.error('Error initiating scans for all repositories:', error);
+      logger.error('Error initiating scans for all repositories:', error);
       res.status(500).json({ error: 'Failed to initiate scans' });
     }
   },
 
   /**
-   * Get scan status
+   * Get scan status and details
    */
   getScanStatus: async (req: Request, res: Response): Promise<void> => {
     try {
       const userId = req.user!.id;
       const { scanId } = req.params;
 
-      const scan = await Scan.findOne({ _id: scanId, userId });
-
-      if (!scan) {
-        res.status(404).json({ error: 'Scan not found' });
+      if (!Types.ObjectId.isValid(scanId)) {
+        res.status(400).json({ error: 'Invalid scan ID format' });
         return;
       }
 
-      res.json({
-        id: scan._id,
+      // Get scan document
+      const scan = await Scan.findOne({
+        _id: scanId,
+        userId,
+      });
+
+      if (!scan) {
+        res.status(404).json({ error: 'Scan not found or access denied' });
+        return;
+      }
+
+      // Get process state information
+      const stateInfo = await scanProcessManager.getScanState(scanId);
+
+      // Prepare response
+      const response = {
+        scanId: scan._id,
+        repositoryId: scan.repositoryId,
         status: scan.status,
-        outdatedCount: scan.outdatedCount,
+        createdAt: scan.createdAt,
         startedAt: scan.startedAt,
         completedAt: scan.completedAt,
+        outdatedCount: scan.outdatedCount,
+        vulnerabilityCount: scan.vulnerabilityCount,
+        highSeverityCount: scan.highSeverityCount,
         errorMessage: scan.errorMessage,
-      });
+        prNumber: scan.prNumber,
+        prUrl: scan.prUrl,
+        // State machine information
+        state: stateInfo?.currentState || scan.status,
+        stateHistory: stateInfo?.history || [],
+      };
+
+      res.status(200).json(response);
     } catch (error) {
-      console.error('Error getting scan status:', error);
-      res.status(500).json({ error: 'Failed to get scan status' });
+      logger.error('Error getting scan status:', error);
+      res.status(500).json({
+        error: 'Failed to get scan status',
+        details: error instanceof Error ? error.message : 'Unknown error',
+      });
     }
   },
 
@@ -184,7 +220,7 @@ const dependencyScanController = {
         completedAt: scan.completedAt,
       });
     } catch (error) {
-      console.error('Error getting outdated dependencies:', error);
+      logger.error('Error getting outdated dependencies:', error);
       res.status(500).json({ error: 'Failed to get outdated dependencies' });
     }
   },
@@ -214,38 +250,23 @@ const dependencyScanController = {
         return;
       }
 
-      // Get user's GitHub token
-      const user = await User.findById(userId);
-      if (!user || !user.githubToken) {
-        res.status(400).json({ error: 'GitHub token not found' });
-        return;
-      }
+      // Transition scan to PR creation state
+      await scanProcessManager.transitionState(scanId, 'pr-creation');
 
-      // Create PR
-      const scanService = new DependencyScanService(userId, user.githubToken);
-      const pullRequest = await scanService.createDependencyUpdatePR(
+      // Queue PR creation job
+      await rabbitMQService.sendToQueue(QUEUE_PR_CREATION, {
         scanId,
-        repoId
-      );
-
-      if (!pullRequest) {
-        res.status(400).json({
-          error: 'No outdated dependencies to update or PR creation failed',
-        });
-        return;
-      }
+        repositoryId: repoId,
+        userId,
+      });
 
       res.json({
         success: true,
-        message: 'Pull request created successfully',
-        pullRequest: {
-          url: pullRequest.html_url,
-          number: pullRequest.number,
-          title: pullRequest.title,
-        },
+        message: 'Pull request creation has been queued',
+        status: 'processing',
       });
     } catch (error) {
-      console.error('Error creating dependency update PR:', error);
+      logger.error('Error creating dependency update PR:', error);
       res.status(500).json({ error: 'Failed to create PR' });
     }
   },
@@ -272,7 +293,7 @@ const dependencyScanController = {
         scans: results,
       });
     } catch (error) {
-      console.error('Error triggering scheduled scan:', error);
+      logger.error('Error triggering scheduled scan:', error);
       res.status(500).json({ error: 'Failed to trigger scan' });
     }
   },
@@ -292,7 +313,7 @@ const dependencyScanController = {
         message: 'Scan schedule updated successfully',
       });
     } catch (error) {
-      console.error('Error updating scan schedule:', error);
+      logger.error('Error updating scan schedule:', error);
       res.status(500).json({ error: 'Failed to update scan schedule' });
     }
   },
@@ -312,9 +333,6 @@ const dependencyScanController = {
 
       logger.info('User ID:', { userId });
       logger.info('Repository ID:', { repoId });
-      //Convert IDs to ObjectId
-      // const objectUserId = toObjectId(userId);
-      // const objectRepoId = toObjectId(repoId);
 
       // Find the most recent scan for this repository (regardless of status)
       const currentScan = await Scan.findOne({
@@ -333,12 +351,23 @@ const dependencyScanController = {
         return;
       }
 
-      logger.info('Current scan found:', currentScan);
+      // Get state information if available
+      const stateInfo = await scanProcessManager.getScanState(
+        currentScan._id.toString()
+      );
+
+      logger.info('Current scan found:', {
+        id: currentScan._id,
+        status: currentScan.status,
+        state: stateInfo?.currentState || currentScan.state,
+      });
 
       // Return scan information
       res.json({
         id: currentScan._id,
         status: currentScan.status,
+        state: stateInfo?.currentState || currentScan.state,
+        stateHistory: stateInfo?.history || [],
         createdAt: currentScan.createdAt,
         startedAt: currentScan.startedAt,
         completedAt: currentScan.completedAt,
@@ -356,6 +385,9 @@ const dependencyScanController = {
     }
   },
 
+  /**
+   * Manually initiate vulnerability scan for a completed dependency scan
+   */
   initiateVulnerabilityScan: async (
     req: Request,
     res: Response
@@ -376,12 +408,19 @@ const dependencyScanController = {
         return;
       }
 
-      if (scan.status !== 'completed') {
+      // Only allow if scan is in appropriate state
+      if (scan.state !== 'dependencies-scanned' && scan.state !== 'completed') {
         res.status(400).json({
-          error: 'Scan must be in completed state to check vulnerabilities',
+          error: `Scan must be in 'dependencies-scanned' or 'completed' state to check vulnerabilities. Current state: ${scan.state}`,
         });
         return;
       }
+
+      // Transition to vulnerability scanning state
+      await scanProcessManager.transitionState(
+        scanId,
+        'vulnerability-scanning'
+      );
 
       // Get scan options from request
       const options = {
@@ -391,12 +430,15 @@ const dependencyScanController = {
         batchSize: req.body.batchSize || 10,
       };
 
-      // Start vulnerability scan in background
-      vulnerabilityScanService
-        .scanVulnerabilities(scanId, options)
-        .catch((error) => {
-          console.error('Error in vulnerability scan process:', error);
-        });
+      // Queue vulnerability scan job
+      await rabbitMQService.sendToQueue<VulnerabilityScanMessage>(
+        QUEUE_VULNERABILITY_SCAN,
+        {
+          scanId,
+          userId,
+          options,
+        }
+      );
 
       res.json({
         success: true,
@@ -404,7 +446,7 @@ const dependencyScanController = {
         scanId,
       });
     } catch (error) {
-      console.error('Error initiating vulnerability scan:', error);
+      logger.error('Error initiating vulnerability scan:', error);
       res.status(500).json({ error: 'Failed to initiate vulnerability scan' });
     }
   },
@@ -447,7 +489,7 @@ const dependencyScanController = {
         dataSource: 'OSV',
       });
     } catch (error) {
-      console.error('Error getting vulnerability summary:', error);
+      logger.error('Error getting vulnerability summary:', error);
       res.status(500).json({ error: 'Failed to get vulnerability summary' });
     }
   },
@@ -488,7 +530,7 @@ const dependencyScanController = {
         dataSource: 'OSV',
       });
     } catch (error) {
-      console.error('Error getting dependency vulnerabilities:', error);
+      logger.error('Error getting dependency vulnerabilities:', error);
       res
         .status(500)
         .json({ error: 'Failed to get dependency vulnerabilities' });

@@ -88,7 +88,7 @@ export const saveOnboardingConfig = async (
     await updateUserOnboardingStatus(userId, true);
 
     // Update scan schedule based on new configuration
-    await scanScheduler.scheduleForUser(userId, undefined, false);
+    await scanScheduler.scheduleForUser(userId, undefined, true);
 
     return config;
   } catch (error) {

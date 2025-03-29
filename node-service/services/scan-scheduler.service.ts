@@ -4,7 +4,14 @@ import User, { IUser } from '../models/User';
 import OnboardingConfig, {
   IOnboardingConfig,
 } from '../models/OnboardingConfig';
-import { initiateAutomaticScan } from './dependency-scan.service';
+import Repository from '../models/Repository';
+import logger from '../utils/logger';
+import rabbitMQService, { QUEUE_SCAN_REPOSITORY } from './rabbitmq.service';
+import {
+  ScanRepositoryMessage,
+  ScheduledScanMessage,
+} from '../types/queue-messages.types';
+import { createScan } from './scan.service';
 
 /**
  * Class for scheduling and managing automatic dependency scans based on user configurations
@@ -22,7 +29,7 @@ export class ScanSchedulerService {
    */
   public async initialize(): Promise<void> {
     try {
-      console.log('Initializing scan scheduler service...');
+      logger.info('Initializing scan scheduler service...');
 
       // Get all users with onboarding config
       const configs = await OnboardingConfig.find();
@@ -35,15 +42,15 @@ export class ScanSchedulerService {
       cron.schedule('0 */6 * * *', () => {
         // Every 6 hours
         this.refreshAllSchedules().catch((err) => {
-          console.error('Error refreshing scan schedules:', err);
+          logger.error('Error refreshing scan schedules:', err);
         });
       });
 
-      console.log(
+      logger.info(
         `Initialized ${Object.keys(this.cronJobs).length} scheduled scans`
       );
     } catch (error) {
-      console.error('Error initializing scan scheduler:', error);
+      logger.error('Error initializing scan scheduler:', error);
     }
   }
 
@@ -59,7 +66,7 @@ export class ScanSchedulerService {
     testMode: boolean = false
   ): Promise<void> {
     try {
-      console.log('scheduling for user', userId, testMode ? '(TEST MODE)' : '');
+      logger.info('Scheduling for user', { userId, testMode });
 
       // Cancel existing job if it exists
       if (this.cronJobs[userId]) {
@@ -71,7 +78,7 @@ export class ScanSchedulerService {
       if (!config) {
         config = await OnboardingConfig.findOne({ userId });
         if (!config) {
-          console.log(`No scan configuration found for user ${userId}`);
+          logger.info(`No scan configuration found for user ${userId}`);
           return;
         }
       }
@@ -81,8 +88,8 @@ export class ScanSchedulerService {
 
       if (testMode) {
         // For testing - run every 2 minutes
-        cronSchedule = '*/2 * * * *';
-        console.log('Using test schedule: every 2 minutes');
+        cronSchedule = '*/5 * * * *';
+        logger.info('Using test schedule: every 2 minutes');
       } else {
         // Normal schedule based on config
         switch (config.scanFrequency) {
@@ -100,34 +107,28 @@ export class ScanSchedulerService {
         }
       }
 
-      // Get user to get GitHub token
-      const user = await User.findById(userId);
-      if (!user || !user.githubToken) {
-        console.error(
-          `User ${userId} not found or doesn't have a GitHub token`
-        );
-        return;
-      }
-
       // Schedule job
       this.cronJobs[userId] = cron.schedule(cronSchedule, () => {
-        console.log(
+        logger.info(
           `Running scheduled scan for user ${userId} at ${new Date().toISOString()}`
         );
-        this.runScanForUser(user).catch((err) => {
-          console.error(
-            `Error running scheduled scan for user ${userId}:`,
-            err
-          );
+        this.runScanForUser(
+          userId,
+          config?.scanVulnerabilities !== false
+        ).catch((err) => {
+          logger.error(`Error running scheduled scan for user ${userId}:`, err);
         });
       });
 
       // For testing purposes, we might want to run a scan immediately
       if (testMode) {
-        console.log(`Test mode: triggering immediate scan for user ${userId}`);
+        logger.info(`Test mode: triggering immediate scan for user ${userId}`);
         setTimeout(() => {
-          this.runScanForUser(user).catch((err) => {
-            console.error(
+          this.runScanForUser(
+            userId,
+            config?.scanVulnerabilities !== false
+          ).catch((err) => {
+            logger.error(
               `Error running immediate test scan for user ${userId}:`,
               err
             );
@@ -135,48 +136,77 @@ export class ScanSchedulerService {
         }, 5000); // Run after 5 seconds to let system stabilize
       }
 
-      console.log(
+      logger.info(
         `Scheduled ${
           testMode ? 'test' : config.scanFrequency
         } scan for user ${userId}`
       );
     } catch (error) {
-      console.error(`Error scheduling scan for user ${userId}:`, error);
+      logger.error(`Error scheduling scan for user ${userId}:`, error);
     }
   }
 
   /**
    * Run a scan for a specific user
+   * @param userId User ID
+   * @param includeVulnerabilities Whether to include vulnerability scanning
    */
-  private async runScanForUser(user: IUser): Promise<void> {
+  private async runScanForUser(
+    userId: string,
+    includeVulnerabilities: boolean = true
+  ): Promise<Record<string, string>> {
     try {
-      console.log(`Running scheduled scan for user ${user._id}`);
+      logger.info(`Running scheduled scan for user ${userId}`);
 
-      // Ensure user has GitHub token
-      if (!user.githubToken) {
+      // Get user to check GitHub token
+      const user = await User.findById(userId);
+      if (!user || !user.githubToken) {
         throw new Error('User does not have a GitHub token');
       }
 
-      // Get user config to check vulnerability scanning preference
-      const config = await OnboardingConfig.findOne({ userId: user._id });
-      const includeVulnerabilities =
-        !config || config.scanVulnerabilities !== false; // Default to true
+      // Get repositories selected for scanning
+      const repositories = await Repository.find({
+        userId,
+        isRepoSelected: true,
+      });
 
-      // Run scan
-      const results = await initiateAutomaticScan(
-        user._id.toString(),
-        user.githubToken,
-        includeVulnerabilities
-      );
+      if (repositories.length === 0) {
+        logger.info(`No repositories selected for scanning by user ${userId}`);
+        return {};
+      }
 
-      console.log(
-        `Started ${Object.keys(results).length} scans for user ${user._id}` +
+      const results: Record<string, string> = {};
+
+      // Create scan records and queue scan jobs for each repository
+      for (const repo of repositories) {
+        // Create a new scan record
+        const scan = await createScan(userId, repo._id.toString());
+
+        // Queue scan job using RabbitMQ
+        await rabbitMQService.sendToQueue<ScanRepositoryMessage>(
+          QUEUE_SCAN_REPOSITORY,
+          {
+            scanId: scan._id.toString(),
+            repositoryId: repo._id.toString(),
+            userId,
+            includeVulnerabilities,
+            initiatedAt: new Date(),
+          }
+        );
+
+        results[repo.name] = scan._id.toString();
+      }
+
+      logger.info(
+        `Started ${Object.keys(results).length} scans for user ${userId}` +
           (includeVulnerabilities
             ? ' with OSV vulnerability scanning'
             : ' without vulnerability scanning')
       );
+
+      return results;
     } catch (error) {
-      console.error(`Error running scan for user ${user._id}:`, error);
+      logger.error(`Error running scan for user ${userId}:`, error);
       throw error;
     }
   }
@@ -186,7 +216,7 @@ export class ScanSchedulerService {
    */
   private async refreshAllSchedules(): Promise<void> {
     try {
-      console.log('Refreshing all scan schedules...');
+      logger.info('Refreshing all scan schedules...');
 
       // Stop all existing jobs
       Object.values(this.cronJobs).forEach((job) => job.stop());
@@ -195,7 +225,7 @@ export class ScanSchedulerService {
       // Re-initialize
       await this.initialize();
     } catch (error) {
-      console.error('Error refreshing scan schedules:', error);
+      logger.error('Error refreshing scan schedules:', error);
     }
   }
 
@@ -206,7 +236,7 @@ export class ScanSchedulerService {
     if (this.cronJobs[userId]) {
       this.cronJobs[userId].stop();
       delete this.cronJobs[userId];
-      console.log(`Cancelled scheduled scan for user ${userId}`);
+      logger.info(`Cancelled scheduled scan for user ${userId}`);
     }
   }
 
@@ -222,9 +252,14 @@ export class ScanSchedulerService {
         throw new Error('User not found or does not have a GitHub token');
       }
 
-      return await initiateAutomaticScan(userId, user.githubToken);
+      // Get user config to check vulnerability scanning preference
+      const config = await OnboardingConfig.findOne({ userId });
+      const includeVulnerabilities =
+        !config || config.scanVulnerabilities !== false; // Default to true
+
+      return await this.runScanForUser(userId, includeVulnerabilities);
     } catch (error) {
-      console.error(`Error triggering scan for user ${userId}:`, error);
+      logger.error(`Error triggering scan for user ${userId}:`, error);
       return null;
     }
   }

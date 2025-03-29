@@ -1,5 +1,7 @@
-import React, { useEffect, useState } from 'react';
+// Updated Dashboard.tsx with WebSocket integration
+import React, { useEffect, useState, useCallback } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
+import { useWebSocket } from '../../contexts/WebSocketContext';
 import apiClient from '../../api';
 import VulnerabilityDetails from '../../components/VulnerabilityDetails';
 
@@ -17,6 +19,7 @@ interface Repository {
 
 const Dashboard: React.FC = () => {
   const { user, logout } = useAuth();
+  const { socket, isConnected } = useWebSocket();
   const [repositories, setRepositories] = useState<Repository[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -27,9 +30,9 @@ const Dashboard: React.FC = () => {
   const [showVulnerabilityModal, setShowVulnerabilityModal] = useState(false);
 
   // Add a function to refresh the dashboard
-  const refreshDashboard = () => {
+  const refreshDashboard = useCallback(() => {
     setRefreshCounter((prev) => prev + 1);
-  };
+  }, []);
 
   const openVulnerabilityDetails = (scanId: string) => {
     console.log('Opening vulnerability details for scan:', scanId);
@@ -52,30 +55,14 @@ const Dashboard: React.FC = () => {
       // Initiate vulnerability scan
       await apiClient.initiateVulnerabilityScan(scanId);
 
-      // Start polling for scan completion
-      const pollingInterval = setInterval(async () => {
-        try {
-          const response = await apiClient.getCurrentRepositoryScan(repoId);
-          const scanData = response.data;
-
-          // If scan is completed, stop polling and refresh dashboard
-          if (scanData.status === 'completed') {
-            clearInterval(pollingInterval);
-            setVulnScanning((prev) => ({ ...prev, [repoId]: false }));
-            refreshDashboard();
-          }
-        } catch (error) {
-          console.error('Error polling scan status:', error);
-          clearInterval(pollingInterval);
-          setVulnScanning((prev) => ({ ...prev, [repoId]: false }));
-        }
-      }, 3000); // Check every 3 seconds
+      // No need to poll anymore - we'll get updates via WebSocket!
     } catch (error) {
       console.error('Error initiating vulnerability scan:', error);
       setVulnScanning((prev) => ({ ...prev, [repoId]: false }));
     }
   };
 
+  // Fetch repositories data
   useEffect(() => {
     const fetchRepositoriesAndScans = async () => {
       try {
@@ -137,21 +124,73 @@ const Dashboard: React.FC = () => {
     };
 
     fetchRepositoriesAndScans();
+  }, [refreshCounter]);
 
-    // Set up polling for in-progress scans
-    const pollingInterval = setInterval(() => {
-      const hasInProgressScans = repositories.some(
-        (repo) =>
-          repo.scanStatus === 'pending' || repo.scanStatus === 'in-progress'
+  // WebSocket event handlers
+  useEffect(() => {
+    if (!socket) return;
+
+    // Listen for scan completion events
+    const handleScanComplete = (data: any) => {
+      console.log('Scan complete notification received:', data);
+
+      const { scanId, repositoryId, status, scanType } = data;
+
+      // Update repository and scan data
+      setRepositories((prevRepos) =>
+        prevRepos.map((repo) => {
+          if (repo.id === repositoryId) {
+            // Update repository with new scan data
+            const updatedRepo = {
+              ...repo,
+              scanStatus: status,
+              lastScanDate: new Date().toISOString(),
+            };
+
+            // Update dependency or vulnerability counts based on scan type
+            if (
+              scanType === 'dependency' &&
+              data.data?.outdatedCount !== undefined
+            ) {
+              updatedRepo.outdatedDependencies = data.data.outdatedCount;
+
+              // Stop scanning indicator
+              setScanning((prev) => ({ ...prev, [repo.id]: false }));
+            }
+
+            if (
+              scanType === 'vulnerability' &&
+              data.data?.vulnerabilityCount !== undefined
+            ) {
+              updatedRepo.vulnerabilities = data.data.vulnerabilityCount;
+
+              // Stop vulnerability scanning indicator
+              setVulnScanning((prev) => ({ ...prev, [repo.id]: false }));
+            }
+
+            return updatedRepo;
+          }
+          return repo;
+        })
       );
+    };
 
-      if (hasInProgressScans) {
-        fetchRepositoriesAndScans();
-      }
-    }, 5000); // Poll every 5 seconds
+    // Listen for PR creation events
+    const handlePRCreated = (data: any) => {
+      console.log('PR created notification received:', data);
+      // Could show a notification or update UI
+    };
 
-    return () => clearInterval(pollingInterval);
-  }, [refreshCounter]); // Depend on refreshCounter to trigger re-fetch
+    // Set up event listeners
+    socket.on('scan_complete', handleScanComplete);
+    socket.on('pr_created', handlePRCreated);
+
+    // Clean up
+    return () => {
+      socket.off('scan_complete', handleScanComplete);
+      socket.off('pr_created', handlePRCreated);
+    };
+  }, [socket]);
 
   const handleScanNow = async (repoId: string) => {
     try {
@@ -160,21 +199,21 @@ const Dashboard: React.FC = () => {
 
       // Store the scan ID from the response
       if (response.data && response.data.scanId) {
-        // Update repositories with current scan ID
+        // Update repositories with current scan ID and pending status
         setRepositories((prev) =>
           prev.map((repo) =>
             repo.id === repoId
-              ? { ...repo, currentScanId: response.data.scanId }
+              ? {
+                  ...repo,
+                  currentScanId: response.data.scanId,
+                  scanStatus: 'pending',
+                }
               : repo
           )
         );
       }
-
-      // Refresh to show updated status
-      refreshDashboard();
     } catch (error) {
       console.error('Error initiating scan:', error);
-    } finally {
       setScanning((prev) => ({ ...prev, [repoId]: false }));
     }
   };
@@ -213,7 +252,6 @@ const Dashboard: React.FC = () => {
     }
   };
 
-  // The rest of the component remains similar
   return (
     <div className='min-h-screen bg-gray-50'>
       <header className='bg-white shadow'>
@@ -225,6 +263,15 @@ const Dashboard: React.FC = () => {
             <span className='text-gray-600'>
               Welcome, {user?.name || 'User'}
             </span>
+            {isConnected ? (
+              <span className='text-xs px-2 py-1 bg-green-100 text-green-800 rounded-full'>
+                Live updates active
+              </span>
+            ) : (
+              <span className='text-xs px-2 py-1 bg-yellow-100 text-yellow-800 rounded-full'>
+                Reconnecting...
+              </span>
+            )}
             <button
               onClick={logout}
               className='px-3 py-1 text-sm bg-gray-200 text-gray-700 rounded hover:bg-gray-300 transition-colors'>
@@ -365,11 +412,14 @@ const Dashboard: React.FC = () => {
 
                         <button
                           className='text-green-600 hover:text-green-900 mr-3'
-                          onMouseOver={() => console.log('Mouse over button')}
-                          onClick={() => {
-                            alert('Button clicked for ' + repo.name);
-                            openVulnerabilityDetails(repo.currentScanId!);
-                          }}
+                          onClick={() =>
+                            openVulnerabilityDetails(repo.currentScanId!)
+                          }
+                          disabled={
+                            repo.scanStatus !== 'completed' ||
+                            !repo.currentScanId ||
+                            repo.vulnerabilities === 0
+                          }
                           style={{
                             opacity:
                               repo.scanStatus !== 'completed' ||
@@ -410,6 +460,7 @@ const Dashboard: React.FC = () => {
           )}
         </div>
       </main>
+
       {/* Vulnerability Modal */}
       {showVulnerabilityModal && selectedScanId && (
         <div className='fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4'>
