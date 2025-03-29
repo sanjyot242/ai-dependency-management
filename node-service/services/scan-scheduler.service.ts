@@ -6,12 +6,12 @@ import OnboardingConfig, {
 } from '../models/OnboardingConfig';
 import Repository from '../models/Repository';
 import logger from '../utils/logger';
+import scanProcessManager from '../services/scan-process-manager.service';
 import rabbitMQService, { QUEUE_SCAN_REPOSITORY } from './rabbitmq.service';
 import {
   ScanRepositoryMessage,
   ScheduledScanMessage,
 } from '../types/queue-messages.types';
-import { createScan } from './scan.service';
 
 /**
  * Class for scheduling and managing automatic dependency scans based on user configurations
@@ -179,18 +179,12 @@ export class ScanSchedulerService {
 
       // Create scan records and queue scan jobs for each repository
       for (const repo of repositories) {
-        // Create a new scan record
-        const scan = await createScan(userId, repo._id.toString());
-
-        // Queue scan job using RabbitMQ
-        await rabbitMQService.sendToQueue<ScanRepositoryMessage>(
-          QUEUE_SCAN_REPOSITORY,
+        const scan = await scanProcessManager.initiateScan(
+          userId,
+          repo._id.toString(),
           {
-            scanId: scan._id.toString(),
-            repositoryId: repo._id.toString(),
-            userId,
             includeVulnerabilities,
-            initiatedAt: new Date(),
+            createPR: true,
           }
         );
 

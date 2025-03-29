@@ -149,11 +149,7 @@ app.post(
   authenticateToken,
   dependencyScanController.createDependencyUpdatePR
 );
-app.post(
-  '/api/dependencies/trigger-scheduled-scan',
-  authenticateToken,
-  dependencyScanController.triggerScheduledScan
-);
+
 app.post(
   '/api/dependencies/update-schedule',
   authenticateToken,

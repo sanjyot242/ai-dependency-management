@@ -18,33 +18,6 @@ interface VulnerabilitiesResult {
   totalVulnerabilities: number;
 }
 
-export const createScan = async (
-  userId: string,
-  repoId: string
-): Promise<IScan> => {
-  try {
-    // Check if repository exists and belongs to user
-    const repository = await Repository.findOne({ _id: repoId, userId });
-
-    if (!repository) {
-      throw new Error('Repository not found or not authorized');
-    }
-
-    // Create new scan
-    const scan = new Scan({
-      repositoryId: repoId,
-      userId,
-      status: 'pending',
-    });
-
-    await scan.save();
-    return scan;
-  } catch (error) {
-    console.error('Error in createScan:', error);
-    throw error;
-  }
-};
-
 export const updateScanStatus = async (
   scanId: string,
   status: 'pending' | 'in-progress' | 'completed' | 'failed',
