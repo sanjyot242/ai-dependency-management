@@ -1,20 +1,6 @@
 import mongoose from 'mongoose';
 
-export interface IRepository extends mongoose.Document {
-  _id: mongoose.Types.ObjectId;
-  userId: mongoose.Types.ObjectId;
-  githubId: string;
-  name: string;
-  fullName: string;
-  description?: string;
-  url?: string;
-  isPrivate: boolean;
-  isRepoSelected: boolean;
-  defaultBranch?: string;
-  language?: string;
-  createdAt: Date;
-  updatedAt: Date;
-}
+import { IRepository } from '../types/models';
 
 const RepositorySchema = new mongoose.Schema<IRepository>({
   userId: {

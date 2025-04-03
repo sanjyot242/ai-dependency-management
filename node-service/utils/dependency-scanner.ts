@@ -1,8 +1,8 @@
 // utils/dependency-scanner.ts
 import axios from 'axios';
 import { updateScanStatus, updateScanResults } from '../services/scan.service';
-import { IDependency, IVulnerability } from '../models/Scan';
-
+import { IDependency, IVulnerability } from '../types/models';
+import { MockDependency } from '../types/services';
 /**
  * Simple utility to scan dependencies in a repository
  * In a real application, this would be more sophisticated and integrated with GitHub API
@@ -93,11 +93,6 @@ const getLatestVersion = async (
     return null;
   }
 };
-
-interface MockDependency {
-  packageName: string;
-  currentVersion: string;
-}
 
 /**
  * Scan dependencies in a repository

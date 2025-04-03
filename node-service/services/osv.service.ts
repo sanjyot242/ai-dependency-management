@@ -2,47 +2,12 @@
 import axios from 'axios';
 import path from 'path';
 import dotenv from 'dotenv';
-import { IVulnerability } from '../models/Scan';
+import { IVulnerability } from '../types/models/index';
+import { OSVVulnerability } from '../types/services';
 
 dotenv.config({ path: path.resolve(__dirname, '../../.env') });
 
 const OSV_API_URL = 'https://api.osv.dev/v1';
-
-interface OSVVulnerability {
-  id: string;
-  summary: string;
-  details: string;
-  modified: string;
-  published: string;
-  severity: {
-    score: number;
-    type: string;
-  }[];
-  affected: {
-    package: {
-      name: string;
-      ecosystem: string;
-    };
-    ranges: {
-      type: string;
-      events: {
-        introduced?: string;
-        fixed?: string;
-      }[];
-    }[];
-    versions?: string[];
-  }[];
-  references: {
-    type: string;
-    url: string;
-  }[];
-  database_specific?: {
-    cwe_ids?: string[];
-    severity?: string;
-    github_reviewed?: boolean;
-  };
-  schema_version: string;
-}
 
 // Map OSV severity to our internal severity levels
 function mapSeverity(

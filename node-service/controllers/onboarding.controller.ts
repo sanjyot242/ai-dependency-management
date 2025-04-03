@@ -5,13 +5,8 @@ import {
   getOnboardingConfig,
   getOnboardingStatus,
 } from '../services/onboarding.service';
-import { INotificationPreferences } from '../models/OnboardingConfig';
-
-interface OnboardingConfigInput {
-  scanFrequency?: 'daily' | 'weekly' | 'monthly';
-  notificationPreferences?: Partial<INotificationPreferences>;
-  autoScanOnPush?: boolean;
-}
+import { INotificationPreferences } from '../types/models';
+import { OnboardingConfigInput } from '../types/dto';
 
 const onboardingController = {
   // Save onboarding configuration

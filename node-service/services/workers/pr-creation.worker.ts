@@ -3,7 +3,7 @@ import logger from '../../utils/logger';
 import rabbitMQService, {
   QUEUE_PR_CREATION,
 } from '../../services/rabbitmq.service';
-import { CreatePRMessage } from '../../types/queue-messages.types';
+import { CreatePRMessage } from '../../types/queue';
 import { DependencyScanService } from '../../services/dependency-scan.service';
 import User from '../../models/User';
 import Scan from '../../models/Scan';

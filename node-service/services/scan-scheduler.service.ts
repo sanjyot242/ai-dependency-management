@@ -1,17 +1,11 @@
 // services/scan-scheduler.service.ts
 import cron from 'node-cron';
-import User, { IUser } from '../models/User';
-import OnboardingConfig, {
-  IOnboardingConfig,
-} from '../models/OnboardingConfig';
+import { IOnboardingConfig } from '../types/models';
+import User from '../models/User';
+import OnboardingConfig from '../models/OnboardingConfig';
 import Repository from '../models/Repository';
 import logger from '../utils/logger';
 import scanProcessManager from '../services/scan-process-manager.service';
-import rabbitMQService, { QUEUE_SCAN_REPOSITORY } from './rabbitmq.service';
-import {
-  ScanRepositoryMessage,
-  ScheduledScanMessage,
-} from '../types/queue-messages.types';
 
 /**
  * Class for scheduling and managing automatic dependency scans based on user configurations

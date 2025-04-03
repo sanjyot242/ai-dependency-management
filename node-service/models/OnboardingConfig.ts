@@ -1,33 +1,6 @@
 import mongoose, { Document, Schema, Types } from 'mongoose';
+import { IOnboardingConfig } from '../types/models';
 
-export interface IEmailNotificationPreferences {
-  enabled: boolean;
-  vulnerabilities: boolean;
-  outdatedDependencies: boolean;
-}
-
-export interface ISlackNotificationPreferences {
-  enabled: boolean;
-  webhookUrl?: string;
-  vulnerabilities: boolean;
-  outdatedDependencies: boolean;
-}
-
-export interface INotificationPreferences {
-  email: IEmailNotificationPreferences;
-  slack: ISlackNotificationPreferences;
-}
-
-export interface IOnboardingConfig extends Document {
-  _id: Types.ObjectId;
-  userId: Types.ObjectId;
-  scanFrequency: 'daily' | 'weekly' | 'monthly';
-  notificationPreferences: INotificationPreferences;
-  scanVulnerabilities?: boolean;
-  autoScanOnPush: boolean;
-  createdAt: Date;
-  updatedAt: Date;
-}
 
 const OnboardingConfigSchema = new Schema<IOnboardingConfig>({
   userId: {

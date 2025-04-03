@@ -1,14 +1,8 @@
 // services/user.service.ts
-import User, { IUser } from '../models/User';
+import User from '../models/User';
+import { IUser } from '../types/models';
 import { Types } from 'mongoose';
-
-interface GithubUserData {
-  id: number;
-  login: string;
-  name?: string;
-  email?: string;
-  avatar_url?: string;
-}
+import { GithubUserData } from '../types/dto';
 
 export const findOrCreateGithubUser = async (
   githubUserData: GithubUserData,

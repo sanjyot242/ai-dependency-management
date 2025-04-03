@@ -1,5 +1,3 @@
-// types/queue-messages.types.ts
-
 /**
  * Message for triggering a dependency scan on a repository
  */
@@ -42,7 +40,7 @@ export interface ScanCompleteMessage {
   repositoryId: string;
   userId: string;
   status: 'completed' | 'failed';
-  scanType: string; // Changed to string to support any state value
+  scanType: string;
   completedAt: Date;
   outdatedCount?: number;
   vulnerabilityCount?: number;
@@ -60,8 +58,10 @@ export interface ScheduledScanMessage {
   scheduledAt: Date;
 }
 
+/**
+ * Message for WebSocket notifications
+ */
 export interface WebSocketNotificationMessage {
-  type: 'scan_complete' | 'pr_created';
-  userId: string;
+  type: 'scan_complete' | 'pr_created' | 'test_message';
   data: any;
 }

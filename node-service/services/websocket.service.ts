@@ -5,7 +5,7 @@ import jwt from 'jsonwebtoken';
 import path from 'path';
 import dotenv from 'dotenv';
 import logger from '../utils/logger';
-import { ScanCompleteMessage } from '../types/queue-messages.types';
+import { ScanCompleteMessage } from '../types/queue';
 
 // Load environment variables
 dotenv.config({ path: path.resolve(__dirname, '../../.env') });

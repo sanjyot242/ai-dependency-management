@@ -5,8 +5,8 @@ import axios from 'axios';
 import dotenv from 'dotenv';
 import path from 'path';
 import { findOrCreateGithubUser, getUserById } from '../services/user.service';
-import { IUser } from '../models/User';
-
+import { IUser } from '../types/models';
+import { GithubUserData, JwtPayload, StateStore } from '../types/dto';
 dotenv.config({ path: path.resolve(__dirname, '../../.env') });
 
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
@@ -16,13 +16,6 @@ const GITHUB_REDIRECT_URI = process.env.GITHUB_REDIRECT_URI;
 const FRONTEND_URL = 'http://localhost:8080';
 const TOKEN_EXPIRY = '7d'; // JWT expiry time
 
-interface StateStore {
-  [key: string]: {
-    redirectUri: string;
-    expiresAt: number;
-  };
-}
-
 // Store OAuth state to prevent CSRF attacks
 // In a production app, use Redis or another persistent store
 const stateStore: StateStore = {};
@@ -30,13 +23,6 @@ const stateStore: StateStore = {};
 const generateState = (): string => {
   return crypto.randomBytes(32).toString('hex');
 };
-
-interface JwtPayload {
-  githubToken: any;
-  id: string;
-  username: string;
-  githubId?: string;
-}
 
 const generateToken = (user: IUser): string => {
   const payload: JwtPayload = {
@@ -48,14 +34,6 @@ const generateToken = (user: IUser): string => {
 
   return jwt.sign(payload, JWT_SECRET, { expiresIn: TOKEN_EXPIRY });
 };
-
-interface GithubUserData {
-  id: number;
-  login: string;
-  name?: string;
-  email?: string;
-  avatar_url?: string;
-}
 
 const authController = {
   // Initiate GitHub OAuth flow

@@ -1,21 +1,8 @@
 // models/user.model.js
-import mongoose, { Document, Schema } from 'mongoose';
-
+import mongoose, { Schema } from 'mongoose';
 import bcrypt from 'bcryptjs';
 
-export interface IUser extends Document {
-  _id: mongoose.Types.ObjectId;
-  username: string;
-  email: string;
-  githubId?: string;
-  githubToken?: string;
-  githubRefreshToken?: string;
-  avatarUrl?: string;
-  name?: string;
-  isOnboarded: boolean;
-  createdAt: Date;
-  updatedAt: Date;
-}
+import { IUser } from '../types/models';
 
 const UserSchema = new Schema<IUser>({
   username: {
