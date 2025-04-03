@@ -3,7 +3,6 @@ import logger from '../../utils/logger';
 import rabbitMQService, {
   QUEUE_WEBSOCKET_NOTIFICATION,
 } from '../../services/rabbitmq.service';
-import { ScanCompleteMessage } from '../../types/queue-messages.types';
 import { getWebSocketService } from '../../services/websocket.service';
 
 class WebsocketNotificationWorker {

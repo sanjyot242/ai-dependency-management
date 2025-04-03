@@ -1,52 +1,26 @@
 // services/dependency-scan.service.ts
 import axios from 'axios';
-import { Types } from 'mongoose';
 import { updateScanStatus, updateScanResults } from './scan.service';
-import { IRepository, IScan,IDependency,IOnboardingConfig } from '../types/models';
+import {
+  IRepository,
+  IScan,
+  IDependency,
+  IOnboardingConfig,
+} from '../types/models';
+import {
+  GithubFile,
+  GithubContent,
+  GithubBranch,
+  GithubPullRequest,
+} from '../types/dto';
 import Repository from '../models/Repository';
 import Scan from '../models/Scan';
 import OnboardingConfig from '../models/OnboardingConfig';
-
+import { PackageJson } from '../types/dto';
 import vulnerabilityScanService from './vulnerability-scan.service';
 
 // SemVer parser
 const semver = require('semver');
-
-interface PackageJson {
-  name: string;
-  dependencies?: Record<string, string>;
-  devDependencies?: Record<string, string>;
-  peerDependencies?: Record<string, string>;
-}
-
-interface GithubFile {
-  path: string;
-  type: string;
-  url?: string;
-  download_url?: string;
-}
-
-interface GithubContent {
-  name: string;
-  path: string;
-  sha: string;
-  content: string;
-  encoding: string;
-}
-
-interface GithubBranch {
-  name: string;
-  commit: {
-    sha: string;
-    url: string;
-  };
-}
-
-interface GithubPullRequest {
-  html_url: string;
-  number: number;
-  title: string;
-}
 
 /**
  * Main class for handling dependency scanning operations

@@ -1,17 +1,7 @@
 // services/risk-analysis.service.ts
 import RiskAnalysis from '../models/RiskAnalysis';
 import { IRiskAnalysis } from '../types/models';
-
-interface RiskAnalysisData {
-  packageName: string;
-  currentVersion: string;
-  targetVersion: string;
-  riskScore: number;
-  breakingChanges: boolean;
-  confidenceLevel?: number;
-  recommendations: string[];
-  aiAnalysisDetails?: any;
-}
+import { RiskAnalysisData } from '../types/dto';
 
 export const createRiskAnalysis = async (
   userId: string,

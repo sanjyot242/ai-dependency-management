@@ -1,18 +1,7 @@
 // services/repository.service.ts
 import Repository from '../models/Repository';
 import { IRepository } from '../types/models';
-
-
-interface GithubRepository {
-  id: number;
-  name: string;
-  full_name: string;
-  description: string | null;
-  html_url: string;
-  private: boolean;
-  default_branch: string;
-  language: string | null;
-}
+import { GithubRepository } from '../types/dto';
 
 export const saveUserRepositories = async (
   userId: string,

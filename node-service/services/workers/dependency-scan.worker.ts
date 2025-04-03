@@ -4,7 +4,7 @@ import logger from '../../utils/logger';
 import rabbitMQService, {
   QUEUE_SCAN_REPOSITORY,
 } from '../../services/rabbitmq.service';
-import { ScanRepositoryMessage } from '../../types/queue-messages.types';
+import { ScanRepositoryMessage } from '../../types/queue';
 import { DependencyScanService } from '../../services/dependency-scan.service';
 import User from '../../models/User';
 import scanProcessManager from '../../services/scan-process-manager.service';

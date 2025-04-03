@@ -1,23 +1,9 @@
 // services/scan.service.ts
-import Scan  from '../models/Scan';
+import Scan from '../models/Scan';
 import Repository from '../models/Repository';
 import { IScan, IDependency } from '../types/models';
 import { Types } from 'mongoose';
-
-interface ScanStatusUpdateData {
-  startedAt?: Date;
-  completedAt?: Date;
-  branch?: string;
-  commit?: string;
-  errorMessage?: string;
-}
-
-interface VulnerabilitiesResult {
-  scanId: Types.ObjectId;
-  scannedAt: Date;
-  vulnerableDependencies: IDependency[];
-  totalVulnerabilities: number;
-}
+import { ScanStatusUpdateData, VulnerabilitiesResult } from '../types/dto';
 
 export const updateScanStatus = async (
   scanId: string,

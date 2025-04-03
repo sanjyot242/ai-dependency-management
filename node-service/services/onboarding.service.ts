@@ -5,32 +5,7 @@ import User from '../models/User';
 import Repository from '../models/Repository';
 import { updateUserOnboardingStatus } from './user.service';
 import { scanScheduler } from './scan-scheduler.service';
-
-interface OnboardingConfigInput {
-  scanFrequency?: 'daily' | 'weekly' | 'monthly';
-  scanVulnerabilities?: boolean;
-  notificationPreferences?: {
-    email?: {
-      enabled?: boolean;
-      vulnerabilities?: boolean;
-      outdatedDependencies?: boolean;
-    };
-    slack?: {
-      enabled?: boolean;
-      webhookUrl?: string;
-      vulnerabilities?: boolean;
-      outdatedDependencies?: boolean;
-    };
-  };
-  autoScanOnPush?: boolean;
-}
-
-interface OnboardingStatus {
-  isOnboarded: boolean;
-  hasSelectedRepositories: boolean;
-  hasConfig: boolean;
-  scanStarted: boolean;
-}
+import { OnboardingConfigInput, OnboardingStatus } from '../types/dto';
 
 // Update the saveOnboardingConfig function to include the new field:
 export const saveOnboardingConfig = async (

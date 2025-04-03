@@ -1,8 +1,9 @@
 // services/scan-process-manager.service.ts
 import { Types } from 'mongoose';
 import logger from '../utils/logger';
-import { IScan,ScanState,StateTransition } from '../types/models';
-import Scan  from '../models/Scan';
+import { IScan, ScanState, StateTransition } from '../types/models';
+import { StateInfo } from '../types/services';
+import Scan from '../models/Scan';
 import rabbitMQService, {
   QUEUE_SCAN_REPOSITORY,
   QUEUE_VULNERABILITY_SCAN,
@@ -14,7 +15,7 @@ import {
   VulnerabilityScanMessage,
   CreatePRMessage,
   ScanCompleteMessage,
-} from '../types/queue-messages.types';
+} from '../types/queue';
 
 /**
  * Service for managing the scanning process workflow
@@ -476,9 +477,7 @@ export class ScanProcessManager {
    * @param scanId Scan ID
    * @returns Current state and full state history
    */
-  public async getScanState(
-    scanId: string
-  ): Promise<{ currentState: ScanState; history: StateTransition[] } | null> {
+  public async getScanState(scanId: string): Promise<StateInfo | null> {
     const scan = await Scan.findById(scanId);
     if (!scan) return null;
 

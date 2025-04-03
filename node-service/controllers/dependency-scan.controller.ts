@@ -9,15 +9,10 @@ import rabbitMQService, {
   QUEUE_PR_CREATION,
   QUEUE_VULNERABILITY_SCAN,
 } from '../services/rabbitmq.service';
-import { VulnerabilityScanMessage } from '../types/queue-messages.types';
-import { getLatestScan, getScanHistory } from '../services/scan.service';
+import { VulnerabilityScanMessage } from '../types/queue';
+import { CreatePRRequestBody } from '../types/dto';
 import { scanScheduler } from '../services/scan-scheduler.service';
 import vulnerabilityScanService from '../services/vulnerability-scan.service';
-
-interface CreatePRRequestBody {
-  scanId: string;
-  repoId: string;
-}
 
 const dependencyScanController = {
   /**

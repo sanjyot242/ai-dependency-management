@@ -6,18 +6,7 @@ import {
   getRepositoryById,
   updateRepositorySelection,
 } from '../services/repository.service';
-
-// GitHub repository type
-interface GithubRepository {
-  id: number;
-  name: string;
-  full_name: string;
-  description: string | null;
-  html_url: string;
-  private: boolean;
-  default_branch: string;
-  language: string | null;
-}
+import { GithubRepository } from '../types/dto';
 
 const repositoryController = {
   // Fetch repositories from GitHub and save to database
