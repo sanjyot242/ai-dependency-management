@@ -1,7 +1,7 @@
 // utils/dependency-scanner.ts
 import axios from 'axios';
 import { updateScanStatus, updateScanResults } from '../services/scan.service';
-import { IDependency, IVulnerability } from '../models/Scan';
+import { IDependency, IVulnerability } from '../types/models';
 
 /**
  * Simple utility to scan dependencies in a repository

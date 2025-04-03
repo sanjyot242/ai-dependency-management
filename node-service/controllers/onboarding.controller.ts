@@ -5,7 +5,7 @@ import {
   getOnboardingConfig,
   getOnboardingStatus,
 } from '../services/onboarding.service';
-import { INotificationPreferences } from '../models/OnboardingConfig';
+import { INotificationPreferences } from '../types/models';
 
 interface OnboardingConfigInput {
   scanFrequency?: 'daily' | 'weekly' | 'monthly';

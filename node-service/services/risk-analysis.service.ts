@@ -1,5 +1,6 @@
 // services/risk-analysis.service.ts
-import RiskAnalysis, { IRiskAnalysis } from '../models/RiskAnalysis';
+import RiskAnalysis from '../models/RiskAnalysis';
+import { IRiskAnalysis } from '../types/models';
 
 interface RiskAnalysisData {
   packageName: string;

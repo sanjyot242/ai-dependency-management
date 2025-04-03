@@ -4,7 +4,6 @@ import { Types } from 'mongoose';
 import logger from '../utils/logger';
 import Repository from '../models/Repository';
 import Scan from '../models/Scan';
-import User from '../models/User';
 import scanProcessManager from '../services/scan-process-manager.service';
 import rabbitMQService, {
   QUEUE_PR_CREATION,

@@ -5,8 +5,7 @@ import axios from 'axios';
 import dotenv from 'dotenv';
 import path from 'path';
 import { findOrCreateGithubUser, getUserById } from '../services/user.service';
-import { IUser } from '../models/User';
-
+import { IUser } from '../types/models';
 dotenv.config({ path: path.resolve(__dirname, '../../.env') });
 
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
