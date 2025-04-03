@@ -1,9 +1,8 @@
 // services/scan-scheduler.service.ts
 import cron from 'node-cron';
-import User, { IUser } from '../models/User';
-import OnboardingConfig, {
-  IOnboardingConfig,
-} from '../models/OnboardingConfig';
+import { IOnboardingConfig } from '../types/models';
+import User from '../models/User';
+import OnboardingConfig from '../models/OnboardingConfig';
 import Repository from '../models/Repository';
 import logger from '../utils/logger';
 import scanProcessManager from '../services/scan-process-manager.service';

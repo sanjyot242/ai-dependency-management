@@ -1,6 +1,7 @@
 // services/scan.service.ts
-import Scan, { IScan, IDependency } from '../models/Scan';
-import Repository, { IRepository } from '../models/Repository';
+import Scan  from '../models/Scan';
+import Repository from '../models/Repository';
+import { IScan, IDependency } from '../types/models';
 import { Types } from 'mongoose';
 
 interface ScanStatusUpdateData {

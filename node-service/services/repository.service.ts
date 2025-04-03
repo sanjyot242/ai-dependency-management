@@ -1,6 +1,7 @@
 // services/repository.service.ts
-import Repository, { IRepository } from '../models/Repository';
-import { Types } from 'mongoose';
+import Repository from '../models/Repository';
+import { IRepository } from '../types/models';
+
 
 interface GithubRepository {
   id: number;

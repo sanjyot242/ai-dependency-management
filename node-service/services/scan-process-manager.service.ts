@@ -1,7 +1,8 @@
 // services/scan-process-manager.service.ts
 import { Types } from 'mongoose';
 import logger from '../utils/logger';
-import Scan, { IScan, ScanState, StateTransition } from '../models/Scan';
+import { IScan,ScanState,StateTransition } from '../types/models';
+import Scan  from '../models/Scan';
 import rabbitMQService, {
   QUEUE_SCAN_REPOSITORY,
   QUEUE_VULNERABILITY_SCAN,

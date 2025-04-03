@@ -2,7 +2,7 @@
 import axios from 'axios';
 import path from 'path';
 import dotenv from 'dotenv';
-import { IVulnerability } from '../models/Scan';
+import { IVulnerability } from '../types/models/index';
 
 dotenv.config({ path: path.resolve(__dirname, '../../.env') });
 

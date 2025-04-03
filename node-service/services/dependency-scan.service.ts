@@ -2,11 +2,10 @@
 import axios from 'axios';
 import { Types } from 'mongoose';
 import { updateScanStatus, updateScanResults } from './scan.service';
-import Repository, { IRepository } from '../models/Repository';
-import Scan, { IScan, IDependency } from '../models/Scan';
-import OnboardingConfig, {
-  IOnboardingConfig,
-} from '../models/OnboardingConfig';
+import { IRepository, IScan,IDependency,IOnboardingConfig } from '../types/models';
+import Repository from '../models/Repository';
+import Scan from '../models/Scan';
+import OnboardingConfig from '../models/OnboardingConfig';
 
 import vulnerabilityScanService from './vulnerability-scan.service';
 

@@ -1,7 +1,6 @@
 // services/onboarding.service.ts
-import OnboardingConfig, {
-  IOnboardingConfig,
-} from '../models/OnboardingConfig';
+import OnboardingConfig from '../models/OnboardingConfig';
+import { IOnboardingConfig } from '../types/models';
 import User from '../models/User';
 import Repository from '../models/Repository';
 import { updateUserOnboardingStatus } from './user.service';

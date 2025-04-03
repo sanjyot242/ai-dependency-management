@@ -1,5 +1,6 @@
 // services/user.service.ts
-import User, { IUser } from '../models/User';
+import User from '../models/User';
+import { IUser } from '../types/models';
 import { Types } from 'mongoose';
 
 interface GithubUserData {
