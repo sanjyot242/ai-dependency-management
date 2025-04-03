@@ -1,20 +1,7 @@
 // models/risk-analysis.model.ts
 import mongoose, { Document, Schema, Types } from 'mongoose';
 
-export interface IRiskAnalysis extends Document {
-  _id: Types.ObjectId;
-  userId: Types.ObjectId;
-  repositoryId: Types.ObjectId;
-  packageName: string;
-  currentVersion: string;
-  targetVersion: string;
-  riskScore: number;
-  breakingChanges: boolean;
-  confidenceLevel?: number;
-  recommendations: string[];
-  aiAnalysisDetails?: any;
-  createdAt: Date;
-}
+import { IRiskAnalysis } from '../types/models';
 
 const RiskAnalysisSchema = new Schema<IRiskAnalysis>({
   userId: {
