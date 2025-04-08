@@ -96,6 +96,13 @@ const ScanSchema = new Schema<IScan>({
   includeVulnerabilities: { type: Boolean, default: true },
   createPR: { type: Boolean, default: false },
 
+  //new field for trigger type
+  triggerType: {
+    type: String,
+    enum: ['scheduled', 'manual', 'push'],
+    default: 'manual',
+  },
+
   branch: String,
   commit: String,
   dependencies: [DependencySchema],
