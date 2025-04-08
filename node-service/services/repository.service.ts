@@ -2,6 +2,7 @@
 import Repository from '../models/Repository';
 import { IRepository } from '../types/models';
 import { GithubRepository } from '../types/dto';
+import webhookService from './webhook.service';
 
 export const saveUserRepositories = async (
   userId: string,
@@ -126,6 +127,46 @@ export const updateRepositorySelection = async (
     return await Repository.find({ userId, isRepoSelected: true });
   } catch (error) {
     console.error('Error in updateRepositorySelection:', error);
+    throw error;
+  }
+};
+
+export const manageRepositoryWebhooks = async (
+  userId: string,
+  newSelectedRepoIds: string[]
+): Promise<void> => {
+  try {
+    // Get the previously selected repositories
+    const previouslySelected = await Repository.find({
+      userId,
+      isRepoSelected: true,
+    });
+    const previouslySelectedIds = previouslySelected.map((repo) =>
+      repo._id.toString()
+    );
+
+    // Calculate differences
+    const addedRepos = newSelectedRepoIds.filter(
+      (id) => !previouslySelectedIds.includes(id)
+    );
+    const removedRepos = previouslySelectedIds.filter(
+      (id) => !newSelectedRepoIds.includes(id)
+    );
+
+    // Create webhooks for newly selected repos
+    for (const repoId of addedRepos) {
+      await webhookService.createRepositoryWebhook(userId, repoId);
+    }
+
+    // Remove webhooks from unselected repos
+    for (const repoId of removedRepos) {
+      await webhookService.removeRepositoryWebhook(userId, repoId);
+    }
+  } catch (error) {
+    console.error(
+      'Error managing repository webhooks:',
+      error instanceof Error ? error.message : 'Unknown error'
+    );
     throw error;
   }
 };

@@ -5,6 +5,7 @@ import {
   getUserRepositories,
   getRepositoryById,
   updateRepositorySelection,
+  manageRepositoryWebhooks,
 } from '../services/repository.service';
 import { GithubRepository } from '../types/dto';
 
@@ -89,6 +90,8 @@ const repositoryController = {
         res.status(400).json({ error: 'Repositories array is required' });
         return;
       }
+
+      await manageRepositoryWebhooks(userId, repositories);
 
       const selectedRepos = await updateRepositorySelection(
         userId,

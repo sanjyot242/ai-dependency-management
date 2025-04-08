@@ -35,10 +35,14 @@ export class ScanProcessManager {
     options: {
       includeVulnerabilities?: boolean;
       createPR?: boolean;
+      triggerType?: 'scheduled' | 'manual' | 'push'; // Add this new option
+      branch?: string; // Add this to track the branch
     } = {}
   ): Promise<IScan> {
     logger.info(
-      `Initiating scan process for repository ${repositoryId}, user ${userId}`
+      `Initiating scan process for repository ${repositoryId}, user ${userId}, trigger: ${
+        options.triggerType || 'manual'
+      }`
     );
 
     try {
@@ -52,11 +56,17 @@ export class ScanProcessManager {
           {
             state: 'initiated',
             timestamp: new Date(),
-            metadata: { options },
+            metadata: {
+              options,
+              triggerType: options.triggerType || 'manual',
+              branch: options.branch,
+            },
           },
         ],
         includeVulnerabilities: options.includeVulnerabilities ?? false,
         createPR: options.createPR ?? false,
+        triggerType: options.triggerType || 'manual', // Store the trigger type
+        branch: options.branch, // Store the branch
         createdAt: new Date(),
       });
 
