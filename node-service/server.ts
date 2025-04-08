@@ -19,6 +19,7 @@ import authController from './controllers/auth.controller';
 import repositoryController from './controllers/repository.controller';
 import onboardingController from './controllers/onboarding.controller';
 import dependencyScanController from './controllers/dependency-scan.controller';
+import webhookController from './controllers/webhook.controller';
 
 // Initialize scan scheduler
 // The scheduler will automatically initialize when imported
@@ -156,68 +157,11 @@ app.post(
   dependencyScanController.updateScanSchedule
 );
 
-// Legacy scan routes - using scanController for existing APIs
-// These now work alongside the new controller for backward compatibility
-// app.get(
-//   '/api/dependencies/repo/:repoId/latest-scan',
-//   authenticateToken,
-//   scanController.getLatestRepositoryScan
-// );
 app.get(
   '/api/dependencies/repo/:repoId/current-scan', // NEW: Added endpoint for current scan
   authenticateToken,
   dependencyScanController.getCurrentRepositoryScan
 );
-
-//TODO: Remove these legacy routes once the new controller is fully integrated
-// app.get(
-//   '/api/dependencies/repo/:repoId/history',
-//   authenticateToken,
-//   scanController.getRepositoryScanHistory
-// );
-// app.get(
-//   '/api/dependencies/repo/:repoId/vulnerabilities',
-//   authenticateToken,
-//   scanController.getRepositoryVulnerabilities
-// );
-// app.post(
-//   '/api/dependencies/analyze-risk',
-//   authenticateToken,
-//   scanController.analyzeUpdateRisk
-// );
-// app.get(
-//   '/api/dependencies/repo/:repoId/risk-analyses',
-//   authenticateToken,
-//   scanController.getRiskAnalyses
-// );
-
-// // Test endpoint for debugging scan triggers
-// app.post('/api/test/trigger-scan', authenticateToken, async (req, res) => {
-//   try {
-//     const userId = req.user!.id;
-//     console.log(`Test endpoint: Triggering scan for user ${userId}`);
-
-//     const user = await User.findById(userId);
-//     if (!user || !user.githubToken) {
-//       return res.status(400).json({ error: 'GitHub token not found' });
-//     }
-
-//     console.log(`Test endpoint: Found GitHub token, initiating scan...`);
-
-//     const results = await scanScheduler.triggerScanForUser(userId);
-
-//     console.log(`Test endpoint: Scan initiated`, results);
-
-//     res.json({
-//       success: true,
-//       message: 'Test scan triggered',
-//       results
-//     });
-//   } catch (error) {
-//     console.error('Error in test scan trigger:', error);
-//     res.status(500).json({ error: 'Test failed' });
-//   }
-// });
 
 app.post(
   '/api/vulnerabilities/scan',
@@ -304,6 +248,8 @@ app.post('/api/test/schedule-test', authenticateToken, async (req, res) => {
     res.status(500).json({ error: 'Failed to set up test schedule' });
   }
 });
+
+app.post('/api/webhooks/github/push', webhookController.handlePushEvent);
 
 // Start server
 server.listen(PORT, () => {

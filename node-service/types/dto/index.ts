@@ -133,3 +133,10 @@ export interface PackageJson {
   devDependencies?: Record<string, string>;
   peerDependencies?: Record<string, string>;
 }
+
+export interface WebhookConfig {
+  url: string;
+  content_type: string;
+  secret: string;
+  events: string[];
+}

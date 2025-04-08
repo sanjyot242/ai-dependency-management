@@ -20,8 +20,10 @@ services:
       - GITHUB_CLIENT_ID=${GITHUB_CLIENT_ID}
       - GITHUB_CLIENT_SECRET=${GITHUB_CLIENT_SECRET}
       - GITHUB_REDIRECT_URI=${GITHUB_REDIRECT_URI}
+      - API_BASE_URL=${API_BASE_URL}
       - RABBITMQ_URL=amqp://user:password@rabbitmq:5672
       - JWT_SECRET=${JWT_SECRET:-your_default_secret_key}
+      - GITHUB_WEBHOOK_SECRET=your-webhook-secret
     networks:
       - app-network
     restart: unless-stopped

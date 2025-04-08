@@ -47,7 +47,7 @@ const authController = {
       };
 
       // Build GitHub OAuth URL
-      const githubAuthUrl = `https://github.com/login/oauth/authorize?client_id=${GITHUB_CLIENT_ID}&redirect_uri=${GITHUB_REDIRECT_URI}&scope=user:email%20repo&state=${state}`;
+      const githubAuthUrl = `https://github.com/login/oauth/authorize?client_id=${GITHUB_CLIENT_ID}&redirect_uri=${GITHUB_REDIRECT_URI}&scope=user:email%20repo%20admin:repo_hook&state=${state}`;
 
       res.json({ authUrl: githubAuthUrl });
     } catch (error) {

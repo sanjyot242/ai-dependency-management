@@ -103,6 +103,13 @@ export interface IScan extends Document {
   includeVulnerabilities: boolean;
   createPR: boolean;
 
+  //new field for trigger type
+  triggerType: {
+    type: String;
+    enum: ['scheduled', 'manual', 'push'];
+    default: 'manual';
+  };
+
   branch?: string;
   commit?: string;
   dependencies: IDependency[];

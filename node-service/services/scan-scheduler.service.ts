@@ -32,13 +32,13 @@ export class ScanSchedulerService {
         await this.scheduleForUser(config.userId.toString(), config);
       }
 
-      // Set up a job to periodically check for new/updated configs
-      cron.schedule('0 */6 * * *', () => {
-        // Every 6 hours
-        this.refreshAllSchedules().catch((err) => {
-          logger.error('Error refreshing scan schedules:', err);
-        });
-      });
+      // // Set up a job to periodically check for new/updated configs
+      // cron.schedule('0 */6 * * *', () => {
+      //   // Every 6 hours
+      //   this.refreshAllSchedules().catch((err) => {
+      //     logger.error('Error refreshing scan schedules:', err);
+      //   });
+      // });
 
       logger.info(
         `Initialized ${Object.keys(this.cronJobs).length} scheduled scans`
@@ -82,8 +82,8 @@ export class ScanSchedulerService {
 
       if (testMode) {
         // For testing - run every 2 minutes
-        cronSchedule = '*/5 * * * *';
-        logger.info('Using test schedule: every 2 minutes');
+        cronSchedule = '*/10 * * * *';
+        logger.info('Using test schedule: every 10 minutes');
       } else {
         // Normal schedule based on config
         switch (config.scanFrequency) {
@@ -114,21 +114,21 @@ export class ScanSchedulerService {
         });
       });
 
-      // For testing purposes, we might want to run a scan immediately
-      if (testMode) {
-        logger.info(`Test mode: triggering immediate scan for user ${userId}`);
-        setTimeout(() => {
-          this.runScanForUser(
-            userId,
-            config?.scanVulnerabilities !== false
-          ).catch((err) => {
-            logger.error(
-              `Error running immediate test scan for user ${userId}:`,
-              err
-            );
-          });
-        }, 5000); // Run after 5 seconds to let system stabilize
-      }
+      // // For testing purposes, we might want to run a scan immediately
+      // if (testMode) {
+      //   logger.info(`Test mode: triggering immediate scan for user ${userId}`);
+      //   setTimeout(() => {
+      //     this.runScanForUser(
+      //       userId,
+      //       config?.scanVulnerabilities !== false
+      //     ).catch((err) => {
+      //       logger.error(
+      //         `Error running immediate test scan for user ${userId}:`,
+      //         err
+      //       );
+      //     });
+      //   }, 5000); // Run after 5 seconds to let system stabilize
+      // }
 
       logger.info(
         `Scheduled ${

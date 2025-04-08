@@ -6,6 +6,8 @@ export interface ScanRepositoryMessage {
   repositoryId: string;
   userId: string;
   includeVulnerabilities?: boolean;
+  triggerType?: 'scheduled' | 'manual' | 'push'; //new field for trigger type
+  branch?: string;
   initiatedAt?: Date;
 }
 
