@@ -37,7 +37,23 @@ const webhookController = {
       }
 
       // 2. Extract repository details from the webhook payload
-      const { repository } = req.body;
+      const { repository, ref, created, head_commit } = req.body;
+
+      //check if push is from PR creation
+      if (
+        created == true ||
+        ref.includes('dependency-updates-') || // Any dependency update branch
+        (head_commit &&
+          head_commit.message &&
+          head_commit.message.includes('[AUTO-GENERATED: DEPENDENCY-SCANNER]'))
+      ) {
+        logger.info(
+          `Skipping scan for PR-related push event on ${repository.name}: ${ref}`
+        );
+        res.status(200).json({ message: 'PR-related push event ignored' });
+        return;
+      }
+
       if (!repository) {
         res.status(400).json({ error: 'Repository information missing' });
         return;
