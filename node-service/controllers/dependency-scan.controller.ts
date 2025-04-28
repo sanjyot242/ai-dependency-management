@@ -13,8 +13,264 @@ import { VulnerabilityScanMessage } from '../types/queue';
 import { CreatePRRequestBody } from '../types/dto';
 import { scanScheduler } from '../services/scan-scheduler.service';
 import vulnerabilityScanService from '../services/vulnerability-scan.service';
+import lockFileIntegrationService from '../services/lock-file-integration.service';
 
-const dependencyScanController = {
+const dependencyScanControllerExtensions = {
+  // Analyze transitive dependencies
+  analyzeTransitiveDependencies: async (
+    req: Request,
+    res: Response
+  ): Promise<void> => {
+    try {
+      const userId = req.user!.id;
+      const { scanId } = req.params;
+
+      // Verify the scan exists and belongs to user
+      const scan = await Scan.findOne({
+        _id: scanId,
+        userId,
+        status: 'completed',
+      });
+
+      if (!scan) {
+        res.status(404).json({ error: 'Completed scan not found' });
+        return;
+      }
+
+      // Check if analysis is already in progress
+      if (scan.transitiveDependenciesStatus === 'in_progress') {
+        res.status(200).json({
+          message: 'Transitive dependency analysis already in progress',
+          status: scan.transitiveDependenciesStatus,
+        });
+        return;
+      }
+
+      // Start analysis using lock file integration service
+      const success =
+        await lockFileIntegrationService.analyzeTransitiveDependencies(scanId);
+
+      if (success) {
+        res.status(200).json({
+          message: 'Transitive dependency analysis started',
+          status: 'in_progress',
+        });
+      } else {
+        res.status(500).json({
+          error: 'Failed to start transitive dependency analysis',
+        });
+      }
+    } catch (error) {
+      logger.error('Error initiating transitive dependency analysis:', error);
+      res.status(500).json({
+        error: 'Failed to initiate analysis',
+        details: error instanceof Error ? error.message : 'Unknown error',
+      });
+    }
+  },
+
+  // Get analysis status
+  getTransitiveDependenciesStatus: async (
+    req: Request,
+    res: Response
+  ): Promise<void> => {
+    try {
+      const userId = req.user!.id;
+      const { scanId } = req.params;
+
+      // Get scan and status
+      const scan = await Scan.findOne({ _id: scanId, userId });
+
+      if (!scan) {
+        res.status(404).json({ error: 'Scan not found' });
+        return;
+      }
+
+      res.status(200).json({
+        scanId,
+        status: scan.transitiveDependenciesStatus,
+        transitiveDependencyCount: scan.transitiveDependencyCount,
+        vulnerableTransitiveDependencyCount:
+          scan.vulnerableTransitiveDependencyCount,
+        directDependencyCount: scan.dependencies.length,
+        analysisMethod: scan.transitiveDependencyFallbackMethod || 'lockfile',
+        createdAt: scan.createdAt,
+        updatedAt: scan.updatedAt,
+      });
+    } catch (error) {
+      logger.error('Error getting transitive dependencies status:', error);
+      res.status(500).json({
+        error: 'Failed to get analysis status',
+        details: error instanceof Error ? error.message : 'Unknown error',
+      });
+    }
+  },
+
+  // Get transitive dependencies for a specific package
+  getPackageTransitiveDependencies: async (
+    req: Request,
+    res: Response
+  ): Promise<void> => {
+    try {
+      const userId = req.user!.id;
+      const { scanId, packageName } = req.params;
+
+      // Verify scan belongs to user
+      const scan = await Scan.findOne({
+        _id: scanId,
+        userId,
+      });
+
+      if (!scan) {
+        res.status(404).json({ error: 'Scan not found' });
+        return;
+      }
+
+      // Find the package in dependencies
+      const dependency = scan.dependencies.find(
+        (dep) => dep.packageName === packageName
+      );
+
+      if (!dependency) {
+        res.status(404).json({ error: 'Package not found in scan' });
+        return;
+      }
+
+      // Check if it has transitive dependencies
+      if (!dependency.transitiveDependencies) {
+        res.status(404).json({
+          error: 'No transitive dependencies found for this package',
+        });
+        return;
+      }
+
+      // Prepare response with transitive info
+      const transInfo = dependency.transitiveDependencies;
+      let treeData = null;
+
+      // Get the tree data based on storage type
+      if (transInfo.storageType === 'embedded' && transInfo.tree) {
+        treeData = transInfo.tree;
+      } else if (
+        transInfo.storageType === 'reference' &&
+        transInfo.storageLocation
+      ) {
+        // For filesystem storage - would be implemented in your main system
+        treeData = {
+          message: 'Tree data stored externally',
+          location: transInfo.storageLocation,
+        };
+      } else if (transInfo.storageType === 's3' && transInfo.storageLocation) {
+        // For S3 storage - would be implemented in your main system
+        treeData = {
+          message: 'Tree data stored in S3',
+          location: transInfo.storageLocation,
+        };
+      }
+
+      // Return the data
+      res.status(200).json({
+        packageName: dependency.packageName,
+        version: dependency.currentVersion,
+        stats: {
+          count: transInfo.count,
+          vulnerableCount: transInfo.vulnerableCount,
+          outdatedCount: transInfo.outdatedCount,
+          maxDepth: transInfo.maxDepth,
+        },
+        tree: treeData,
+      });
+    } catch (error) {
+      logger.error('Error getting package transitive dependencies:', error);
+      res.status(500).json({
+        error: 'Failed to get transitive dependencies',
+        details: error instanceof Error ? error.message : 'Unknown error',
+      });
+    }
+  },
+
+  // Get a summary of all transitive dependencies for a scan
+  getTransitiveDependenciesSummary: async (
+    req: Request,
+    res: Response
+  ): Promise<void> => {
+    try {
+      const userId = req.user!.id;
+      const { scanId } = req.params;
+
+      // Verify scan belongs to user
+      const scan = await Scan.findOne({
+        _id: scanId,
+        userId,
+      });
+
+      if (!scan) {
+        res.status(404).json({ error: 'Scan not found' });
+        return;
+      }
+
+      // Check if transitive analysis is completed
+      if (scan.transitiveDependenciesStatus !== 'completed') {
+        res.status(400).json({
+          error: 'Transitive dependency analysis not completed',
+          status: scan.transitiveDependenciesStatus,
+        });
+        return;
+      }
+
+      // Gather summary data
+      const summary = {
+        scanId,
+        repositoryId: scan.repositoryId,
+        directDependencies: scan.dependencies.length,
+        transitiveDependencies: scan.transitiveDependencyCount,
+        vulnerableDirectDependencies: scan.dependencies.filter(
+          (dep) => dep.vulnerabilities && dep.vulnerabilities.length > 0
+        ).length,
+        vulnerableTransitiveDependencies:
+          scan.vulnerableTransitiveDependencyCount,
+        analysisMethod: scan.transitiveDependencyFallbackMethod || 'lockfile',
+        topVulnerablePackages: [] as Array<{
+          packageName: string;
+          directVulnerabilities: number;
+          transitiveVulnerabilities: number;
+        }>,
+      };
+
+      // Get top vulnerable packages
+      const vulnerablePackages = scan.dependencies
+        .filter(
+          (dep) =>
+            (dep.vulnerabilities && dep.vulnerabilities.length > 0) ||
+            (dep.transitiveDependencies &&
+              dep.transitiveDependencies.vulnerableCount > 0)
+        )
+        .map((dep) => ({
+          packageName: dep.packageName,
+          directVulnerabilities: dep.vulnerabilities?.length || 0,
+          transitiveVulnerabilities:
+            dep.transitiveDependencies?.vulnerableCount || 0,
+          totalVulnerabilities:
+            (dep.vulnerabilities?.length || 0) +
+            (dep.transitiveDependencies?.vulnerableCount || 0),
+        }))
+        .sort((a, b) => b.totalVulnerabilities - a.totalVulnerabilities)
+        .slice(0, 10);
+
+      summary.topVulnerablePackages = vulnerablePackages;
+
+      res.status(200).json(summary);
+    } catch (error) {
+      logger.error('Error getting transitive dependencies summary:', error);
+      res.status(500).json({
+        error: 'Failed to get summary',
+        details: error instanceof Error ? error.message : 'Unknown error',
+      });
+    }
+  },
+};
+
+const exsistingDependencyScanController = {
   /**
    * Initiate a manual scan for a repository using the process manager
    */
@@ -530,6 +786,12 @@ const dependencyScanController = {
         .json({ error: 'Failed to get dependency vulnerabilities' });
     }
   },
+};
+
+// Merge with existing controller
+const dependencyScanController = {
+  ...exsistingDependencyScanController,
+  ...dependencyScanControllerExtensions,
 };
 
 export default dependencyScanController;

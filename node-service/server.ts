@@ -249,6 +249,30 @@ app.post('/api/test/schedule-test', authenticateToken, async (req, res) => {
   }
 });
 
+app.post(
+  '/api/dependencies/scan/:scanId/transitive',
+  authenticateToken,
+  dependencyScanController.analyzeTransitiveDependencies
+);
+
+app.get(
+  '/api/dependencies/scan/:scanId/transitive/status',
+  authenticateToken,
+  dependencyScanController.getTransitiveDependenciesStatus
+);
+
+app.get(
+  '/api/dependencies/scan/:scanId/transitive/summary',
+  authenticateToken,
+  dependencyScanController.getTransitiveDependenciesSummary
+);
+
+app.get(
+  '/api/dependencies/scan/:scanId/package/:packageName/transitive',
+  authenticateToken,
+  dependencyScanController.getPackageTransitiveDependencies
+);
+
 app.post('/api/webhooks/github/push', webhookController.handlePushEvent);
 
 // Start server

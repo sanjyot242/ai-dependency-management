@@ -16,6 +16,7 @@ import {
   CreatePRMessage,
   ScanCompleteMessage,
 } from '../types/queue';
+import lockFileIntegrationService from './lock-file-integration.service';
 
 /**
  * Service for managing the scanning process workflow
@@ -125,6 +126,28 @@ export class ScanProcessManager {
       await this.transitionState(scanId, 'dependencies-scanned', {
         outdatedCount: data.outdatedCount,
       });
+
+      // Automatically start transitive dependency analysis
+      // Run in background without blocking the scan flow
+      lockFileIntegrationService
+        .analyzeTransitiveDependencies(scanId)
+        .then((success) => {
+          if (success) {
+            logger.info(
+              `Transitive dependency analysis initiated for scanId=${scanId}`
+            );
+          } else {
+            logger.warn(
+              `Failed to initiate transitive analysis for scanId=${scanId}`
+            );
+          }
+        })
+        .catch((error) => {
+          logger.error(
+            `Error initiating transitive analysis for scanId=${scanId}:`,
+            error
+          );
+        });
 
       // Determine next step based on scan options and results
       if (scan.includeVulnerabilities && (data.outdatedCount ?? 0) > 0) {

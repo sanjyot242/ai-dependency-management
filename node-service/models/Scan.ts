@@ -120,6 +120,26 @@ const ScanSchema = new Schema<IScan>({
   // Timestamps
   startedAt: Date,
   completedAt: Date,
+
+  transitiveDependenciesStatus: {
+    type: String,
+    enum: ['not_started', 'in_progress', 'completed', 'failed'],
+    default: 'not_started',
+  },
+  transitiveDependencyCount: {
+    type: Number,
+    default: 0,
+  },
+  vulnerableTransitiveDependencyCount: {
+    type: Number,
+    default: 0,
+  },
+  transitiveDependencyFallbackMethod: {
+    type: String,
+    enum: ['lockfile', 'api', null],
+    default: null,
+  },
+
   createdAt: { type: Date, default: Date.now },
   updatedAt: { type: Date, default: Date.now },
 });

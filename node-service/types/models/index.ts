@@ -59,6 +59,7 @@ export interface IDependency {
   vulnerabilities?: IVulnerability[];
   filePath?: string;
   dependencyType?: string;
+  transitiveDependencies?: ITransitiveDependencyInfo;
 }
 
 /**
@@ -124,6 +125,14 @@ export interface IScan extends Document {
   // Error information
   errorMessage?: string;
 
+  transitiveDependenciesStatus?:
+    | 'not_started'
+    | 'in_progress'
+    | 'completed'
+    | 'failed';
+  transitiveDependencyCount?: number;
+  vulnerableTransitiveDependencyCount?: number;
+  transitiveDependencyFallbackMethod?: 'lockfile' | 'api' | null;
   // Timestamps
   startedAt?: Date;
   completedAt?: Date;
@@ -188,4 +197,15 @@ export interface IRiskAnalysis extends Document {
   recommendations: string[];
   aiAnalysisDetails?: any;
   createdAt: Date;
+}
+
+export interface ITransitiveDependencyInfo {
+  count: number;
+  vulnerableCount: number;
+  outdatedCount: number;
+  maxDepth: number;
+  analyzed: boolean;
+  storageType: 'embedded' | 's3' | 'reference';
+  storageLocation?: string;
+  tree?: any; // For embedded storage
 }
