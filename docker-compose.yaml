@@ -31,18 +31,18 @@ services:
   # Worker Process for Background Jobs
 
   # Python Service for Any ML/Analysis Needs
-  python-service:
-    build:
-      context: ./python-service
-      dockerfile: Dockerfile
-    container_name: python-service
-    ports:
-      - '3002:3002'
-    environment:
-      - PYTHONUNBUFFERED=1
-    networks:
-      - app-network
-    restart: unless-stopped
+  # python-service:
+  #   build:
+  #     context: ./python-service
+  #     dockerfile: Dockerfile
+  #   container_name: python-service
+  #   ports:
+  #     - '3002:3002'
+  #   environment:
+  #     - PYTHONUNBUFFERED=1
+  #   networks:
+  #     - app-network
+  #   restart: unless-stopped
 
   # React Frontend
   frontend:

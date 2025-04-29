@@ -1,31 +1,117 @@
-// services/npm-lock-parser.service.ts
-
-import fs from 'fs/promises';
 import { DependencyNode } from '../types/services/dependency-tree';
 import logger from '../utils/logger';
-import SemverUtils from '../utils/semver.utils';
 
 /**
  * Service for parsing npm package-lock.json files to extract dependency trees
  */
 export class NpmLockParserService {
   /**
+   * Check if the content is a valid lock file
+   * @param lockData Parsed lock file data
+   * @returns Whether it's a valid lock file
+   */
+  private isValidLockFile(lockData: any): boolean {
+    // Check for lockfileVersion property (most reliable indicator)
+    if ('lockfileVersion' in lockData) {
+      return true;
+    }
+
+    // Check for other lock file indicators
+    const hasPackages =
+      'packages' in lockData && typeof lockData.packages === 'object';
+    const hasDependencies =
+      'dependencies' in lockData && typeof lockData.dependencies === 'object';
+    const hasRequires =
+      'requires' in lockData && typeof lockData.requires === 'object';
+
+    // Check for npm v1 lock file structure
+    if (hasDependencies && (hasRequires || 'name' in lockData)) {
+      return true;
+    }
+
+    // Check for npm v2+ lock file structure
+    if (hasPackages) {
+      return true;
+    }
+
+    return false;
+  }
+
+  /**
+   * Get or infer lock file version
+   * @param lockData Parsed lock file data
+   * @returns Lock file version (defaults to 1 if not present)
+   */
+  private getLockFileVersion(lockData: any): number {
+    // If explicitly defined, use that
+    if (
+      'lockfileVersion' in lockData &&
+      typeof lockData.lockfileVersion === 'number'
+    ) {
+      return lockData.lockfileVersion;
+    }
+
+    // Infer based on structure
+    if ('packages' in lockData) {
+      // npm v7+ uses a flat packages structure
+      return 2;
+    }
+
+    // Default to v1 for npm v6 and earlier
+    return 1;
+  }
+  /**
    * Parse a package-lock.json file to extract the dependency tree
    * @param lockFileContent Content of package-lock.json
    * @returns Array of root dependency nodes
    */
   public async parseLockFile(
-    lockFileContent: string
+    lockFileContent: string | any
   ): Promise<DependencyNode[]> {
     try {
-      // Parse the lock file JSON
-      const lockData = JSON.parse(lockFileContent);
+      // Check if the content is already an object (could happen if it's pre-parsed)
+      let lockData;
+      if (typeof lockFileContent === 'string') {
+        try {
+          lockData = JSON.parse(lockFileContent);
+        } catch (jsonError) {
+          logger.error('Error parsing lock file JSON:', jsonError);
 
-      // Check lock file version
-      if (!lockData.lockfileVersion) {
-        logger.warn(`Unsupported npm lock file version`);
+          // Try to debug what's wrong with the content
+          if (lockFileContent.startsWith('object')) {
+            // Content might already be stringified or an object reference
+            logger.error(
+              `Invalid JSON content starts with "object". Content type: ${typeof lockFileContent}`
+            );
+            logger.debug(
+              `Content preview: ${lockFileContent.substring(0, 100)}...`
+            );
+            throw new Error('Invalid JSON content, starts with "object"');
+          }
+
+          throw jsonError;
+        }
+      } else if (typeof lockFileContent === 'object') {
+        // Content is already an object
+        lockData = lockFileContent;
+      } else {
+        throw new Error(
+          `Unexpected lock file content type: ${typeof lockFileContent}`
+        );
+      }
+
+      // Check if it's a valid lock file
+      if (!this.isValidLockFile(lockData)) {
+        logger.warn(`Provided content doesn't appear to be a valid lock file`);
+        logger.debug(
+          `Lock file content keys: ${Object.keys(lockData).join(', ')}`
+        );
         return [];
       }
+
+      // Get or infer lock file version
+      const lockfileVersion = this.getLockFileVersion(lockData);
+      logger.info(`Processing lock file with version ${lockfileVersion}`);
 
       const rootNodes: DependencyNode[] = [];
 
@@ -38,6 +124,9 @@ export class NpmLockParserService {
         await this.parseNpmLockfileV1(lockData, rootNodes);
       }
 
+      logger.info(
+        `Successfully parsed lock file, found ${rootNodes.length} root dependencies`
+      );
       return rootNodes;
     } catch (error) {
       logger.error(`Error parsing npm lock file:`, error);
@@ -70,6 +159,18 @@ export class NpmLockParserService {
       });
     }
 
+    // Handle case where there's no root package information
+    if (directDependencies.size === 0 && lockData.dependencies) {
+      Object.keys(lockData.dependencies).forEach((name) => {
+        directDependencies.add(name);
+      });
+    }
+
+    // Log for debugging
+    logger.debug(
+      `Found ${directDependencies.size} direct dependencies in lock file`
+    );
+
     // Build a cache of all packages
     if (lockData.packages) {
       for (const [pkgPath, pkgInfo] of Object.entries(lockData.packages)) {
@@ -81,6 +182,8 @@ export class NpmLockParserService {
         if (pkgPath.startsWith('node_modules/')) {
           // Extract from path (e.g., node_modules/lodash)
           const parts = pkgPath.split('/');
+          if (parts.length < 2) continue;
+
           name = parts[1].startsWith('@')
             ? `${parts[1]}/${parts[2]}`
             : parts[1];
@@ -105,7 +208,12 @@ export class NpmLockParserService {
           }
         }
 
-        if (!name || !version) continue;
+        if (!name || !version) {
+          logger.debug(
+            `Skipping package with missing name or version: ${pkgPath}`
+          );
+          continue;
+        }
 
         // Create node for this package
         const isDirect = directDependencies.has(name);
@@ -139,6 +247,8 @@ export class NpmLockParserService {
 
         if (pkgPath.startsWith('node_modules/')) {
           const parts = pkgPath.split('/');
+          if (parts.length < 2) continue;
+
           name = parts[1].startsWith('@')
             ? `${parts[1]}/${parts[2]}`
             : parts[1];
@@ -190,6 +300,33 @@ export class NpmLockParserService {
         }
       }
     }
+
+    // Handle case where no root nodes were found
+    if (rootNodes.length === 0 && packageCache.size > 0) {
+      logger.warn(
+        `No direct dependencies found, but ${packageCache.size} packages in cache. Creating synthetic root nodes.`
+      );
+
+      // Find all packages that aren't referenced by others - they might be root nodes
+      const referencedPackages = new Set<string>();
+
+      for (const node of packageCache.values()) {
+        for (const [depName, depNode] of node.dependencies.entries()) {
+          referencedPackages.add(`${depNode.name}@${depNode.version}`);
+        }
+      }
+
+      // Add unreferenced packages as root nodes
+      for (const [key, node] of packageCache.entries()) {
+        if (!referencedPackages.has(key)) {
+          node.depth = 1;
+          node.dependencyType = 'dependencies';
+          rootNodes.push(node);
+        }
+      }
+
+      logger.info(`Added ${rootNodes.length} synthetic root nodes`);
+    }
   }
 
   /**
@@ -224,16 +361,22 @@ export class NpmLockParserService {
   private extractPackageName(pkgPath: string): string {
     if (pkgPath.startsWith('node_modules/')) {
       const parts = pkgPath.split('/');
+      if (parts.length < 2) return '';
       return parts[1].startsWith('@') ? `${parts[1]}/${parts[2]}` : parts[1];
     }
 
     // For other formats
     const pkgId = pkgPath as string;
     if (pkgId.startsWith('@')) {
-      return pkgId.split('@')[0];
+      const parts = pkgId.split('@');
+      if (parts.length > 0) {
+        return `@${parts[1]}`;
+      }
+      return '';
     }
 
-    return pkgId.split('@')[0];
+    const parts = pkgId.split('@');
+    return parts[0] || '';
   }
 
   /**
@@ -246,10 +389,25 @@ export class NpmLockParserService {
     // For npm 6 and earlier, dependencies are nested
     const directDeps = lockData.dependencies || {};
 
+    // Log for debugging
+    logger.debug(
+      `Found ${
+        Object.keys(directDeps).length
+      } direct dependencies in v1 lock file`
+    );
+
     // Process direct dependencies
     for (const [name, info] of Object.entries(directDeps)) {
+      if (!info) {
+        logger.debug(`Skipping null/undefined dependency info for ${name}`);
+        continue;
+      }
+
       const version = (info as any).version;
-      if (!version) continue;
+      if (!version) {
+        logger.debug(`Skipping dependency without version: ${name}`);
+        continue;
+      }
 
       // Determine dependency type
       const depType = this.determineDependencyType(lockData, name);
@@ -284,6 +442,8 @@ export class NpmLockParserService {
     depth: number
   ): Promise<void> {
     for (const [name, info] of Object.entries(dependencies)) {
+      if (!info) continue;
+
       const version = info.version;
       if (!version) continue;
 

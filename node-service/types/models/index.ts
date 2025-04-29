@@ -33,6 +33,15 @@ export interface IRepository extends Document {
   isRepoSelected: boolean;
   defaultBranch?: string;
   language?: string;
+  packageJsonFiles?: Array<{
+    path: string;
+    lastScan?: Date;
+  }>;
+  lockFiles?: Array<{
+    path: string;
+    lockfileVersion?: number;
+    lastScan?: Date;
+  }>;
   createdAt: Date;
   updatedAt: Date;
 }

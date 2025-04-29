@@ -29,6 +29,34 @@ const RepositorySchema = new mongoose.Schema<IRepository>({
   },
   defaultBranch: String,
   language: String,
+  packageJsonFiles: [
+    {
+      path: {
+        type: String,
+        required: true,
+      },
+      lastScan: {
+        type: Date,
+        default: null,
+      },
+    },
+  ],
+  lockFiles: [
+    {
+      path: {
+        type: String,
+        required: true,
+      },
+      lockfileVersion: {
+        type: Number,
+        default: null,
+      },
+      lastScan: {
+        type: Date,
+        default: null,
+      },
+    },
+  ],
   createdAt: {
     type: Date,
     default: Date.now,

@@ -155,13 +155,13 @@ const dependencyScanControllerExtensions = {
         transInfo.storageType === 'reference' &&
         transInfo.storageLocation
       ) {
-        // For filesystem storage - would be implemented in your main system
+        // For filesystem storage
         treeData = {
           message: 'Tree data stored externally',
           location: transInfo.storageLocation,
         };
       } else if (transInfo.storageType === 's3' && transInfo.storageLocation) {
-        // For S3 storage - would be implemented in your main system
+        // For S3 storage
         treeData = {
           message: 'Tree data stored in S3',
           location: transInfo.storageLocation,

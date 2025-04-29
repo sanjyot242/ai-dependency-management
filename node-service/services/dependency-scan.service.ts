@@ -18,6 +18,7 @@ import Scan from '../models/Scan';
 import OnboardingConfig from '../models/OnboardingConfig';
 import { PackageJson } from '../types/dto';
 import vulnerabilityScanService from './vulnerability-scan.service';
+import logger from '../utils/logger';
 
 // SemVer parser
 const semver = require('semver');
@@ -33,6 +34,7 @@ export class DependencyScanService {
 
   /**
    * Runs a scan for a specific repository
+   * Modified to track package.json and lock files
    */
   public async scanRepository(
     repoId: string,
@@ -62,6 +64,9 @@ export class DependencyScanService {
         });
         return await Scan.findById(scanId);
       }
+
+      // Track package.json and lock files for future use
+      await this.trackRepositoryFiles(repository, packageFiles);
 
       // Get default branch name and latest commit
       const defaultBranch = await this.getDefaultBranch(repository);
@@ -632,6 +637,128 @@ export class DependencyScanService {
     } catch (error) {
       console.error('Error in fullRepositoryScan:', error);
       throw error;
+    }
+  }
+
+  /**
+   * Track package.json and lock files during repository scan
+   * This helps avoid repeated lookups when analyzing transitive dependencies
+   */
+  private async trackRepositoryFiles(
+    repository: IRepository,
+    packageFiles: GithubFile[]
+  ): Promise<void> {
+    try {
+      logger.info(
+        `Tracking package and lock files for repository ${repository.name}`
+      );
+
+      // Initialize arrays to store file paths
+      const packageJsonFiles: Array<{ path: string; lastScan?: Date }> = [];
+      const lockFiles: Array<{
+        path: string;
+        lockfileVersion?: number;
+        lastScan?: Date;
+      }> = [];
+
+      // Track all package.json files
+      for (const file of packageFiles) {
+        packageJsonFiles.push({
+          path: file.path,
+          lastScan: new Date(),
+        });
+
+        // For each package.json, check if there's a corresponding lock file
+        try {
+          const directory = file.path.split('/').slice(0, -1).join('/');
+          const lockFilePath = directory
+            ? `${directory}/package-lock.json`
+            : 'package-lock.json';
+
+          // Try to get the lock file content
+          const lockFileContent = await this.getPackageJsonContent(
+            repository,
+            lockFilePath
+          );
+
+          if (lockFileContent) {
+            // Check if the content is actually a lock file (has lockfileVersion)
+            // For package-lock.json, it should have a lockfileVersion property
+            if (
+              'lockfileVersion' in lockFileContent ||
+              lockFileContent.lockfileVersion !== undefined
+            ) {
+              const lockfileVersion = lockFileContent.lockfileVersion || 1;
+
+              lockFiles.push({
+                path: lockFilePath,
+                lockfileVersion,
+                lastScan: new Date(),
+              });
+
+              logger.info(
+                `Found package-lock.json at ${lockFilePath} (version ${lockfileVersion})`
+              );
+            } else {
+              logger.debug(
+                `File at ${lockFilePath} doesn't appear to be a valid lock file`
+              );
+            }
+          }
+        } catch (error) {
+          // Lock file not found, try npm-shrinkwrap.json
+          try {
+            const directory = file.path.split('/').slice(0, -1).join('/');
+            const shrinkwrapPath = directory
+              ? `${directory}/npm-shrinkwrap.json`
+              : 'npm-shrinkwrap.json';
+
+            const shrinkwrapContent = await this.getPackageJsonContent(
+              repository,
+              shrinkwrapPath
+            );
+
+            if (shrinkwrapContent) {
+              // Check if it's a valid shrinkwrap file
+              if (
+                'lockfileVersion' in shrinkwrapContent ||
+                shrinkwrapContent.lockfileVersion !== undefined
+              ) {
+                const lockfileVersion = shrinkwrapContent.lockfileVersion || 1;
+
+                lockFiles.push({
+                  path: shrinkwrapPath,
+                  lockfileVersion,
+                  lastScan: new Date(),
+                });
+
+                logger.info(
+                  `Found npm-shrinkwrap.json at ${shrinkwrapPath} (version ${lockfileVersion})`
+                );
+              } else {
+                logger.debug(
+                  `File at ${shrinkwrapPath} doesn't appear to be a valid shrinkwrap file`
+                );
+              }
+            }
+          } catch (shrinkwrapError) {
+            // No lock file found for this package.json, continue to next file
+          }
+        }
+      }
+
+      // Update repository with file paths
+      await Repository.findByIdAndUpdate(repository._id, {
+        packageJsonFiles,
+        lockFiles,
+      });
+
+      logger.info(
+        `Tracked ${packageJsonFiles.length} package.json and ${lockFiles.length} lock files for ${repository.name}`
+      );
+    } catch (error) {
+      logger.error(`Error tracking repository files:`, error);
+      // Continue with scan process despite file tracking errors
     }
   }
 }
