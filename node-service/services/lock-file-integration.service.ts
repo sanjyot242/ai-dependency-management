@@ -1,6 +1,6 @@
 // services/lock-file-integration.service.ts
 
-import { Types } from 'mongoose';
+// import { Types } from 'mongoose'; // Unused import
 import axios from 'axios';
 import { DependencyNode } from '../types/services/dependency-tree';
 import npmLockParserService from './npm-lock-parser.service';
@@ -10,6 +10,7 @@ import Repository from '../models/Repository';
 import User from '../models/User';
 import { ITransitiveDependencyInfo } from '../types/models';
 import SemverUtils from '../utils/semver.utils';
+import IterativeDependencyTraverser, { DEPENDENCY_LIMITS } from '../utils/dependency-tree.utils';
 
 /**
  * Service to integrate lock file analysis with the existing scan process
@@ -18,6 +19,8 @@ export class LockFileIntegrationService {
   private memoryCacheTTL = 300000; // 5 minutes in milliseconds
   private memoryCache: Map<string, { data: any; timestamp: number }> =
     new Map();
+  private traverser: IterativeDependencyTraverser | null = null;
+  private allNodes: Map<string, DependencyNode> | null = null;
 
   /**
    * Analyze transitive dependencies using lock file
@@ -83,8 +86,14 @@ export class LockFileIntegrationService {
           `Successfully parsed lock file for repository ${repository.name}, found ${rootNodes.length} root dependencies`
         );
 
+        // Add memory usage check before enrichment
+        const memoryBefore = process.memoryUsage();
+        logger.info(`Memory usage before enrichment: ${Math.round(memoryBefore.heapUsed / 1024 / 1024)}MB`);
+
         // Enrich nodes with latest versions and vulnerability data
+        logger.info('Starting dependency node enrichment...');
         await this.enrichDependencyNodes(rootNodes);
+        logger.info('Dependency node enrichment completed successfully');
 
         // Update direct dependencies with transitive information
         await this.updateDirectDependencies(scanId, rootNodes);
@@ -454,58 +463,243 @@ export class LockFileIntegrationService {
    * Enrich dependency nodes with latest versions and vulnerability data
    */
   private async enrichDependencyNodes(nodes: DependencyNode[]): Promise<void> {
-    // Process all unique packages in batches
-    const allPackages = this.collectAllPackages(nodes);
-    const batchSize = 10;
+    const startTime = Date.now();
 
-    logger.info(
-      `Enriching ${allPackages.length} unique packages with metadata`
-    );
+    try {
+      // Process all unique packages in batches using iterative collection
+      const allPackages = this.collectAllPackages(nodes);
 
-    // Process in batches to avoid API rate limits
-    for (let i = 0; i < allPackages.length; i += batchSize) {
-      const batch = allPackages.slice(i, i + batchSize);
-
-      // Fetch latest versions and vulnerability info in parallel
-      await Promise.all([
-        this.batchGetLatestVersions(batch),
-        this.batchCheckVulnerabilities(batch),
-      ]);
-
-      // Avoid rate limits
-      if (i + batchSize < allPackages.length) {
-        await new Promise((resolve) => setTimeout(resolve, 100));
+      // Validate package count and apply limits
+      if (allPackages.length === 0) {
+        logger.warn('No packages found for enrichment');
+        return;
       }
+
+      if (allPackages.length > DEPENDENCY_LIMITS.MAX_NODES) {
+        logger.warn(`Too many packages (${allPackages.length}), limiting to ${DEPENDENCY_LIMITS.MAX_NODES}`);
+        allPackages.splice(DEPENDENCY_LIMITS.MAX_NODES);
+      }
+
+      // Adaptive batch sizing based on package count
+      const batchSize = this.calculateOptimalBatchSize(allPackages.length);
+
+      logger.info(
+        `Enriching ${allPackages.length} unique packages with metadata (batch size: ${batchSize})`
+      );
+
+      // Process in batches with progress tracking
+      let processedCount = 0;
+      const totalBatches = Math.ceil(allPackages.length / batchSize);
+
+      for (let i = 0; i < allPackages.length; i += batchSize) {
+        // Check processing time limit
+        if (Date.now() - startTime > DEPENDENCY_LIMITS.MAX_PROCESSING_TIME) {
+          logger.warn(`Enrichment timeout after ${DEPENDENCY_LIMITS.MAX_PROCESSING_TIME}ms, processed ${processedCount}/${allPackages.length} packages`);
+          break;
+        }
+
+        const batch = allPackages.slice(i, i + batchSize);
+        const batchNumber = Math.floor(i / batchSize) + 1;
+
+        logger.debug(`Processing batch ${batchNumber}/${totalBatches} (${batch.length} packages)`);
+
+        try {
+          // Log batch start for debugging
+          logger.debug(`Starting batch ${batchNumber}: packages [${batch.map(([name]) => name).slice(0, 3).join(', ')}${batch.length > 3 ? '...' : ''}]`);
+
+          // Fetch latest versions and vulnerability info in parallel with timeout
+          await Promise.race([
+            Promise.all([
+              this.batchGetLatestVersions(batch),
+              this.batchCheckVulnerabilities(batch),
+            ]),
+            new Promise((_, reject) =>
+              setTimeout(() => reject(new Error('Batch timeout')), 120000) // 2 minute timeout per batch
+            )
+          ]);
+
+          processedCount += batch.length;
+
+          // Progress reporting with memory monitoring
+          if (batchNumber % 5 === 0 || batchNumber === totalBatches) {
+            const currentMemory = process.memoryUsage();
+            logger.info(`Enrichment progress: ${processedCount}/${allPackages.length} packages (${Math.round(processedCount/allPackages.length*100)}%) - Memory: ${Math.round(currentMemory.heapUsed / 1024 / 1024)}MB`);
+          }
+
+          logger.debug(`Completed batch ${batchNumber} successfully`);
+
+        } catch (batchError) {
+          logger.error(`Error processing batch ${batchNumber}:`, {
+            error: batchError instanceof Error ? batchError.message : String(batchError),
+            batch: batch.map(([name, version]) => `${name}@${version}`).slice(0, 3),
+            batchSize: batch.length
+          });
+          // Continue with next batch instead of failing completely
+        }
+
+        // Adaptive rate limiting based on batch size and API response times
+        if (i + batchSize < allPackages.length) {
+          const delay = this.calculateBatchDelay(batchSize);
+          await new Promise((resolve) => setTimeout(resolve, delay));
+        }
+      }
+
+      const totalTime = Date.now() - startTime;
+      logger.info(`Package enrichment completed: ${processedCount}/${allPackages.length} packages in ${totalTime}ms`);
+
+    } catch (error) {
+      logger.error('Error in dependency node enrichment:', error);
+      throw error;
     }
   }
 
   /**
-   * Collect all unique packages from a dependency tree
+   * Calculate optimal batch size based on total package count
+   */
+  private calculateOptimalBatchSize(totalPackages: number): number {
+    if (totalPackages < 100) return 5;
+    if (totalPackages < 1000) return 10;
+    if (totalPackages < 5000) return 15;
+    return 20; // Max batch size for very large projects
+  }
+
+  /**
+   * Calculate delay between batches based on batch size
+   */
+  private calculateBatchDelay(batchSize: number): number {
+    // Smaller batches = shorter delay, larger batches = longer delay
+    const baseDelay = 100;
+    const scaledDelay = batchSize * 10; // 10ms per item in batch
+    return Math.min(baseDelay + scaledDelay, 1000); // Max 1 second delay
+  }
+
+  /**
+   * Collect all unique packages from a dependency tree using iterative approach
    */
   private collectAllPackages(nodes: DependencyNode[]): Array<[string, string]> {
+    try {
+      this.traverser = new IterativeDependencyTraverser();
+      const packages = this.traverser.collectAllPackages(
+        nodes,
+        DEPENDENCY_LIMITS.MAX_DEPTH,
+        DEPENDENCY_LIMITS.MAX_NODES
+      );
+
+      // Build allNodes map for quick lookups during enrichment
+      this.allNodes = new Map<string, DependencyNode>();
+      this.buildNodeMap(nodes, this.allNodes);
+
+      // Log performance metrics
+      const metrics = this.traverser.getMetrics();
+      logger.info('Package collection completed:', {
+        uniquePackages: metrics.uniquePackages,
+        totalNodes: metrics.totalNodes,
+        maxDepth: metrics.maxDepth,
+        circularReferences: metrics.circularReferences,
+        processingTimeMs: metrics.processingTimeMs,
+        memoryUsageMB: metrics.memoryUsageMB,
+        allNodesCount: this.allNodes.size
+      });
+
+      // Warn about circular dependencies
+      const circularDeps = this.traverser.getCircularDependencies();
+      if (circularDeps.length > 0) {
+        logger.warn(`Found ${circularDeps.length} circular dependencies in dependency tree:`, {
+          examples: circularDeps.slice(0, 3),
+          totalCount: circularDeps.length
+        });
+      }
+
+      return packages;
+    } catch (error) {
+      logger.error('Error in iterative package collection:', error);
+      // Fallback to limited collection
+      return this.collectAllPackagesLimited(nodes, 20); // Limit to 20 levels
+    }
+  }
+
+  /**
+   * Build node map for quick lookups using iterative approach with circular dependency protection
+   */
+  private buildNodeMap(nodes: DependencyNode[], nodeMap: Map<string, DependencyNode>): void {
+    const stack: DependencyNode[] = [...nodes];
+    const visited = new Set<string>();
+    let processedCount = 0;
+    const maxIterations = 10000; // Safety limit
+
+    logger.debug(`Building node map from ${nodes.length} root nodes...`);
+
+    while (stack.length > 0 && processedCount < maxIterations) {
+      const node = stack.pop()!;
+      const nodeKey = `${node.name}@${node.version}`;
+
+      // Skip if already processed (circular dependency protection)
+      if (visited.has(nodeKey)) {
+        continue;
+      }
+      visited.add(nodeKey);
+      processedCount++;
+
+      // Add to map if not already present
+      if (!nodeMap.has(nodeKey)) {
+        nodeMap.set(nodeKey, node);
+      }
+
+      // Add children to stack
+      for (const [, childNode] of node.dependencies.entries()) {
+        stack.push(childNode);
+      }
+
+      // Progress logging for large trees
+      if (processedCount % 100 === 0) {
+        logger.debug(`BuildNodeMap progress: ${processedCount} nodes processed, stack: ${stack.length}`);
+      }
+    }
+
+    if (processedCount >= maxIterations) {
+      logger.warn(`BuildNodeMap hit iteration limit (${maxIterations}), may be incomplete`);
+    }
+
+    logger.debug(`Node map built successfully: ${nodeMap.size} unique nodes from ${processedCount} iterations`);
+  }
+
+  /**
+   * Fallback method for package collection with limited depth
+   */
+  private collectAllPackagesLimited(
+    nodes: DependencyNode[],
+    maxDepth: number
+  ): Array<[string, string]> {
     const packages = new Set<string>();
     const result: Array<[string, string]> = [];
+    let nodeCount = 0;
+    const maxNodes = 5000; // Emergency limit
 
-    // Traverse the tree
-    const traverse = (node: DependencyNode) => {
+    const traverseLimited = (node: DependencyNode, depth: number) => {
+      if (depth > maxDepth || nodeCount > maxNodes) {
+        return;
+      }
+
       const key = `${node.name}@${node.version}`;
+      nodeCount++;
 
       if (!packages.has(key)) {
         packages.add(key);
         result.push([node.name, node.version]);
 
-        // Process children
+        // Process children with depth limit
         for (const [_, childNode] of node.dependencies.entries()) {
-          traverse(childNode);
+          traverseLimited(childNode, depth + 1);
         }
       }
     };
 
-    // Process each root node
+    // Process each root node with limited depth
     for (const node of nodes) {
-      traverse(node);
+      traverseLimited(node, 1);
     }
 
+    logger.warn(`Used limited fallback collection: ${result.length} packages, max depth ${maxDepth}`);
     return result;
   }
 
@@ -575,42 +769,31 @@ export class LockFileIntegrationService {
   }
 
   /**
-   * Update all nodes in the tree with latest version info
+   * Update all nodes in the tree with latest version info using iterative approach
    */
   private updateNodeLatestVersion(
     name: string,
     version: string,
     latestVersion: string | null
   ): void {
-    // We need to traverse all nodes in the tree to update matching packages
-    let updatedCount = 0;
+    // Use the cached nodes from traverser if available
+    if (this.traverser && this.allNodes && this.allNodes.size > 0) {
+      const nodeKey = `${name}@${version}`;
+      const targetNode = this.allNodes.get(nodeKey);
 
-    const updateMatchingNodes = (node: DependencyNode) => {
-      // For each dependency in this node
-      node.dependencies.forEach((depNode, depName) => {
-        // If this node matches the target package
-        if (depNode.name === name && depNode.version === version) {
-          // Update with latest version info
-          depNode.latestVersion = latestVersion || undefined;
+      if (targetNode) {
+        targetNode.latestVersion = latestVersion || undefined;
 
-          // Determine if outdated
-          if (latestVersion) {
-            depNode.isOutdated = SemverUtils.isGreaterThan(
-              latestVersion,
-              version
-            );
-            updatedCount++;
-          }
+        // Determine if outdated
+        if (latestVersion) {
+          targetNode.isOutdated = SemverUtils.isGreaterThan(
+            latestVersion,
+            version
+          );
         }
+      }
+    }
 
-        // Recursively update children
-        updateMatchingNodes(depNode);
-      });
-    };
-
-    // We can't access the root nodes directly here, but the method is called
-    // during the enrichment process where we have all nodes anyway
-    // This is primarily to document the implementation for future reference
     logger.debug(
       `Updated latest version for ${name}@${version}: ${
         latestVersion || 'unknown'
@@ -627,26 +810,18 @@ export class LockFileIntegrationService {
     isVulnerable: boolean,
     vulnerabilityCount: number
   ): void {
-    // As with the above method, we would traverse all nodes to update matching packages
-    let updatedCount = 0;
+    // Use the cached nodes from traverser if available
+    if (this.traverser && this.allNodes && this.allNodes.size > 0) {
+      const nodeKey = `${name}@${version}`;
+      const targetNode = this.allNodes.get(nodeKey);
 
-    const updateMatchingNodes = (node: DependencyNode) => {
-      // For each dependency in this node
-      node.dependencies.forEach((depNode, depName) => {
-        // If this node matches the target package
-        if (depNode.name === name && depNode.version === version) {
-          // Update with vulnerability info
-          depNode.isVulnerable = isVulnerable;
-          depNode.vulnerabilityCount = vulnerabilityCount;
-          updatedCount++;
-        }
+      if (targetNode) {
+        targetNode.isVulnerable = isVulnerable;
+        targetNode.vulnerabilityCount = vulnerabilityCount;
+      }
+    }
 
-        // Recursively update children
-        updateMatchingNodes(depNode);
-      });
-    };
-
-    // Similarly, we can't access the root nodes directly here
+    // Log for debugging
     if (isVulnerable) {
       logger.debug(
         `Updated vulnerability info for ${name}@${version}: ${vulnerabilityCount} vulnerabilities`
@@ -783,9 +958,21 @@ export class LockFileIntegrationService {
     let vulnerableCount = 0;
     let outdatedCount = 0;
 
-    // Traverse the tree to count dependencies
-    const traverse = (currentNode: DependencyNode): void => {
-      for (const [_, childNode] of currentNode.dependencies.entries()) {
+    // Iterative traversal using stack
+    const stack: DependencyNode[] = [node];
+    const visited = new Set<string>();
+
+    while (stack.length > 0) {
+      const currentNode = stack.pop()!;
+      const nodeKey = `${currentNode.name}@${currentNode.version}`;
+
+      // Skip if already visited (handle circular dependencies)
+      if (visited.has(nodeKey)) {
+        continue;
+      }
+      visited.add(nodeKey);
+
+      for (const [, childNode] of currentNode.dependencies.entries()) {
         count++;
 
         if (childNode.isVulnerable) {
@@ -796,56 +983,100 @@ export class LockFileIntegrationService {
           outdatedCount++;
         }
 
-        // Recursively process children
-        traverse(childNode);
+        // Add children to stack for processing
+        stack.push(childNode);
       }
-    };
-
-    traverse(node);
+    }
 
     return { count, vulnerableCount, outdatedCount };
   }
 
   /**
-   * Calculate the maximum depth of a tree
+   * Calculate the maximum depth of a tree using iterative approach
    */
   private calculateMaxDepth(node: DependencyNode): number {
     let maxDepth = 0;
 
-    const traverse = (currentNode: DependencyNode, depth: number): void => {
+    // Iterative traversal using stack with depth tracking
+    const stack: Array<{ node: DependencyNode; depth: number }> = [{ node, depth: 1 }];
+    const visited = new Set<string>();
+
+    while (stack.length > 0) {
+      const { node: currentNode, depth } = stack.pop()!;
+      const nodeKey = `${currentNode.name}@${currentNode.version}`;
+
+      // Skip if already visited (handle circular dependencies)
+      if (visited.has(nodeKey)) {
+        continue;
+      }
+      visited.add(nodeKey);
+
       maxDepth = Math.max(maxDepth, depth);
 
-      for (const [_, childNode] of currentNode.dependencies.entries()) {
-        traverse(childNode, depth + 1);
+      for (const [, childNode] of currentNode.dependencies.entries()) {
+        stack.push({ node: childNode, depth: depth + 1 });
       }
-    };
-
-    traverse(node, 1);
+    }
 
     return maxDepth;
   }
 
   /**
-   * Serialize a dependency tree to a plain object format for storage
+   * Serialize a dependency tree to a plain object format for storage using iterative approach
    */
-  private serializeTree(node: DependencyNode): any {
-    const serializedDeps: Record<string, any> = {};
+  private serializeTree(rootNode: DependencyNode): any {
+    const visited = new Set<string>();
+    const stack: Array<{ node: DependencyNode; parent?: any; key?: string }> = [
+      { node: rootNode }
+    ];
+    let result: any = null;
 
-    for (const [depName, childNode] of node.dependencies.entries()) {
-      serializedDeps[depName] = this.serializeTree(childNode);
+    while (stack.length > 0) {
+      const { node, parent, key } = stack.pop()!;
+      const nodeKey = `${node.name}@${node.version}`;
+
+      // Skip if already visited (handle circular dependencies)
+      if (visited.has(nodeKey)) {
+        if (parent && key) {
+          parent[key] = {
+            name: node.name,
+            version: node.version,
+            _circular: true
+          };
+        }
+        continue;
+      }
+      visited.add(nodeKey);
+
+      const serializedNode = {
+        name: node.name,
+        version: node.version,
+        isVulnerable: node.isVulnerable,
+        vulnerabilityCount: node.vulnerabilityCount,
+        isOutdated: node.isOutdated,
+        latestVersion: node.latestVersion,
+        depth: node.depth,
+        dependencyType: node.dependencyType,
+        dependencies: {} as Record<string, any>,
+      };
+
+      if (parent && key) {
+        parent[key] = serializedNode;
+      } else {
+        result = serializedNode;
+      }
+
+      // Add children to stack for processing
+      for (const [depName, childNode] of node.dependencies.entries()) {
+        stack.push({
+          node: childNode,
+          parent: serializedNode.dependencies,
+          key: depName
+        });
+      }
     }
 
-    return {
-      name: node.name,
-      version: node.version,
-      isVulnerable: node.isVulnerable,
-      vulnerabilityCount: node.vulnerabilityCount,
-      isOutdated: node.isOutdated,
-      latestVersion: node.latestVersion,
-      depth: node.depth,
-      dependencyType: node.dependencyType,
-      dependencies: serializedDeps,
-    };
+    return result;
   }
 }
 

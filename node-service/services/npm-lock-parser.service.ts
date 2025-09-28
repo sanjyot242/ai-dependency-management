@@ -1,5 +1,6 @@
 import { DependencyNode } from '../types/services/dependency-tree';
 import logger from '../utils/logger';
+import IterativeDependencyTraverser, { DEPENDENCY_LIMITS } from '../utils/dependency-tree.utils';
 
 /**
  * Service for parsing npm package-lock.json files to extract dependency trees
@@ -424,9 +425,9 @@ export class NpmLockParserService {
         dependencyType: depType,
       };
 
-      // Process transitive dependencies
+      // Process transitive dependencies using iterative approach
       if ((info as any).dependencies) {
-        await this.processNpmDependencies(node, (info as any).dependencies, 2);
+        await this.processNpmDependenciesIteratively(node, (info as any).dependencies, 2);
       }
 
       rootNodes.push(node);
@@ -434,37 +435,84 @@ export class NpmLockParserService {
   }
 
   /**
-   * Process npm dependencies recursively
+   * Process npm dependencies using iterative approach to prevent stack overflow
    */
-  private async processNpmDependencies(
+  private async processNpmDependenciesIteratively(
     parentNode: DependencyNode,
     dependencies: Record<string, any>,
-    depth: number
+    startDepth: number
   ): Promise<void> {
+    try {
+      const traverser = new IterativeDependencyTraverser();
+      const nodeMap = traverser.processTreeIteratively(dependencies, DEPENDENCY_LIMITS.MAX_NODES, startDepth);
+
+      // Connect the processed nodes to the parent
+      for (const [name, info] of Object.entries(dependencies)) {
+        if (!info || !info.version) continue;
+
+        const nodeKey = `${name}@${info.version}`;
+        const childNode = nodeMap.get(nodeKey);
+
+        if (childNode && childNode.depth === startDepth) {
+          parentNode.dependencies.set(name, childNode);
+        }
+      }
+
+      // Log performance metrics
+      const metrics = traverser.getMetrics();
+      logger.info(`Processed dependencies iteratively:`, {
+        totalNodes: metrics.totalNodes,
+        maxDepth: metrics.maxDepth,
+        processingTime: metrics.processingTimeMs,
+        memoryUsage: metrics.memoryUsageMB
+      });
+
+      // Report circular dependencies if found
+      const circularDeps = traverser.getCircularDependencies();
+      if (circularDeps.length > 0) {
+        logger.warn(`Found ${circularDeps.length} circular dependencies:`, circularDeps.slice(0, 5));
+      }
+
+    } catch (error) {
+      logger.error('Error in iterative dependency processing:', error);
+      // Fallback to limited processing
+      await this.processNpmDependenciesLimited(parentNode, dependencies, startDepth, 10);
+    }
+  }
+
+  /**
+   * Fallback method with limited depth for error scenarios
+   */
+  private async processNpmDependenciesLimited(
+    parentNode: DependencyNode,
+    dependencies: Record<string, any>,
+    depth: number,
+    maxDepth: number
+  ): Promise<void> {
+    if (depth > maxDepth) {
+      logger.warn(`Reached maximum fallback depth ${maxDepth}, stopping traversal`);
+      return;
+    }
+
     for (const [name, info] of Object.entries(dependencies)) {
-      if (!info) continue;
+      if (!info || !info.version) continue;
 
-      const version = info.version;
-      if (!version) continue;
-
-      // Create node for this dependency
       const node: DependencyNode = {
         name,
-        version,
+        version: info.version,
         dependencies: new Map(),
-        isVulnerable: false, // Will be populated later
+        isVulnerable: false,
         vulnerabilityCount: 0,
-        isOutdated: false, // Will be populated later
+        isOutdated: false,
         depth,
         dependencyType: 'transitive',
       };
 
-      // Process nested dependencies
-      if (info.dependencies) {
-        await this.processNpmDependencies(node, info.dependencies, depth + 1);
+      // Limited recursive processing
+      if (info.dependencies && depth < maxDepth) {
+        await this.processNpmDependenciesLimited(node, info.dependencies, depth + 1, maxDepth);
       }
 
-      // Add to parent's dependencies
       parentNode.dependencies.set(name, node);
     }
   }
