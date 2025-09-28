@@ -8,6 +8,10 @@
     RUN npm install
     
     COPY . .
+    COPY .env .env
+
+    RUN printenv
+
     # This will create a production-ready build in /usr/src/app/dist
     RUN npm run build
     

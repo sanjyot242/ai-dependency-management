@@ -1,0 +1,22 @@
+{
+  "compilerOptions": {
+    "target": "ES6",
+    "module": "CommonJS",
+    "outDir": "dist",
+    "rootDir": "./",
+    "strict": true,
+    "esModuleInterop": true,
+    "forceConsistentCasingInFileNames": true,
+    "skipLibCheck": true
+  },
+  "include": [
+    "server.ts",
+    "routes/**/*",
+    "utils/**/*",
+    "db",
+    "models/**/*",
+    "services/**/*",
+    "middleware/**/*",
+    "controllers/**/*"
+  ]
+}

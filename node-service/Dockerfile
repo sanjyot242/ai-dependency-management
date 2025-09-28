@@ -1,16 +1,23 @@
-# node-service/Dockerfile
+# Use Node.js 18 Alpine for a lightweight image
 FROM node:18-alpine AS build
+
+# Set the working directory
 WORKDIR /usr/src/app
 
-# Copy only package files first to leverage Docker's layer caching
+# Copy package files first to leverage Docker layer caching
 COPY package*.json ./
+
+# Install dependencies
 RUN npm install
 
-# Now copy the rest of the code
+# Copy the entire project
 COPY . .
 
-# Expose port (the one you use in server.js—assume 3001 here)
+# Build the TypeScript code
+RUN npm run build
+
+# Expose the port (same as before)
 EXPOSE 3001
 
-# Define the command to start your server
-CMD ["npm", "start"]
+# Start the server using the compiled JavaScript file
+CMD ["node", "dist/server.js"]

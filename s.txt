@@ -1,0 +1,20 @@
+worker-service:
+    build:
+      context: ./node-service
+      dockerfile: Dockerfile.worker
+    container_name: dependency-worker
+    depends_on:
+      - db
+      - rabbitmq
+    environment:
+      - NODE_ENV=production
+      - MONGO_URL=mongodb://db:27017/dependencydb
+      - PYTHON_SERVICE_URL=http://python-service:3002
+      - GITHUB_CLIENT_ID=${GITHUB_CLIENT_ID}
+      - GITHUB_CLIENT_SECRET=${GITHUB_CLIENT_SECRET}
+      - RABBITMQ_URL=amqp://user:password@rabbitmq:5672
+    networks:
+      - app-network
+    restart: unless-stopped
+    # Entry point to run workers instead of API server
+    command: ['node', 'dist/services/workers/index.js']
