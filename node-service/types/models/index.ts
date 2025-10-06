@@ -141,6 +141,8 @@ export interface IScan extends Document {
     | 'failed';
   transitiveDependencyCount?: number;
   vulnerableTransitiveDependencyCount?: number;
+  outdatedTransitiveDependencyCount?: number;
+  maxTransitiveDependencyDepth?: number;
   transitiveDependencyFallbackMethod?: 'lockfile' | 'api' | null;
   // Timestamps
   startedAt?: Date;

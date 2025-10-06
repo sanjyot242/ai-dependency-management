@@ -912,15 +912,21 @@ export class LockFileIntegrationService {
           totalVulnerableCount += vulnerableCount;
 
           // Create transitive dependency info
+          const maxDepth = this.calculateMaxDepth(node);
           const transitiveDependencies: ITransitiveDependencyInfo = {
             count,
             vulnerableCount,
             outdatedCount,
-            maxDepth: this.calculateMaxDepth(node),
+            maxDepth,
             analyzed: true,
             storageType: 'embedded',
-            tree: this.serializeTree(node),
+            // Only store tree for small dependencies or skip to avoid bloating DB
+            tree: count < 50 ? this.serializeTree(node) : undefined,
           };
+
+          logger.debug(
+            `${node.name} transitive info: ${count} deps, ${vulnerableCount} vulnerable, ${outdatedCount} outdated, depth ${maxDepth}`
+          );
 
           // Update the dependency
           directDependencies[matchingDepIndex] = {
@@ -930,15 +936,27 @@ export class LockFileIntegrationService {
         }
       }
 
-      // Update scan with enhanced dependencies
+      // Calculate aggregate statistics for better UI display
+      const totalOutdatedTransitive = directDependencies.reduce(
+        (sum, dep) => sum + (dep.transitiveDependencies?.outdatedCount || 0),
+        0
+      );
+      const maxTransitiveDepth = Math.max(
+        ...directDependencies.map(dep => dep.transitiveDependencies?.maxDepth || 0)
+      );
+
+      // Update scan with enhanced dependencies and statistics
       await Scan.findByIdAndUpdate(scanId, {
         dependencies: directDependencies,
         transitiveDependencyCount: totalTransitiveCount,
         vulnerableTransitiveDependencyCount: totalVulnerableCount,
+        // Add new aggregate fields for UI
+        outdatedTransitiveDependencyCount: totalOutdatedTransitive,
+        maxTransitiveDependencyDepth: maxTransitiveDepth,
       });
 
       logger.info(
-        `Updated scan with transitive dependency info: ${totalTransitiveCount} total, ${totalVulnerableCount} vulnerable`
+        `Updated scan with transitive dependency info: ${totalTransitiveCount} total, ${totalVulnerableCount} vulnerable, ${totalOutdatedTransitive} outdated, max depth ${maxTransitiveDepth}`
       );
     } catch (error) {
       logger.error(`Error updating direct dependencies:`, error);
