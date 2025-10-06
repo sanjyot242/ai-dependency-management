@@ -4,6 +4,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useWebSocket } from '../../contexts/WebSocketContext';
 import apiClient from '../../api';
 import VulnerabilityDetails from '../../components/VulnerabilityDetails';
+import DependencyDetails from '../../components/DependencyDetails';
 
 interface Repository {
   id: string;
@@ -27,7 +28,9 @@ const Dashboard: React.FC = () => {
   const [scanning, setScanning] = useState<Record<string, boolean>>({});
   const [vulnScanning, setVulnScanning] = useState<Record<string, boolean>>({});
   const [selectedScanId, setSelectedScanId] = useState<string | null>(null);
+  const [selectedRepositoryId, setSelectedRepositoryId] = useState<string | null>(null);
   const [showVulnerabilityModal, setShowVulnerabilityModal] = useState(false);
+  const [showDependencyModal, setShowDependencyModal] = useState(false);
 
   // Add a function to refresh the dashboard
   const refreshDashboard = useCallback(() => {
@@ -43,6 +46,17 @@ const Dashboard: React.FC = () => {
   const closeVulnerabilityDetails = () => {
     setShowVulnerabilityModal(false);
     setSelectedScanId(null);
+  };
+
+  const openDependencyDetails = (repositoryId: string) => {
+    console.log('Opening dependency details for repository:', repositoryId);
+    setSelectedRepositoryId(repositoryId);
+    setShowDependencyModal(true);
+  };
+
+  const closeDependencyDetails = () => {
+    setShowDependencyModal(false);
+    setSelectedRepositoryId(null);
   };
 
   const handleScanVulnerabilities = async (repoId: string, scanId: string) => {
@@ -381,8 +395,10 @@ const Dashboard: React.FC = () => {
                       <td className='px-6 py-4 whitespace-nowrap text-sm font-medium'>
                         <button
                           className='text-blue-600 hover:text-blue-900 mr-3'
-                          onClick={() => {
-                            /* View details action */
+                          onClick={() => openDependencyDetails(repo.id)}
+                          disabled={repo.scanStatus !== 'completed'}
+                          style={{
+                            opacity: repo.scanStatus !== 'completed' ? 0.5 : 1,
                           }}>
                           View Details
                         </button>
@@ -471,6 +487,14 @@ const Dashboard: React.FC = () => {
             />
           </div>
         </div>
+      )}
+
+      {/* Dependency Details Modal */}
+      {showDependencyModal && selectedRepositoryId && (
+        <DependencyDetails
+          repositoryId={selectedRepositoryId}
+          onClose={closeDependencyDetails}
+        />
       )}
     </div>
   );

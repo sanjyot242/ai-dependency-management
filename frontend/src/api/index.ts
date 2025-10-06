@@ -68,31 +68,82 @@ interface OnboardingStatus {
   scanStarted: boolean;
 }
 
+// Transitive Dependency Information
+interface TransitiveDependencyInfo {
+  count: number;
+  vulnerableCount: number;
+  outdatedCount: number;
+  maxDepth: number;
+  analyzed: boolean;
+  storageType: 'embedded' | 'external';
+  tree?: any; // Optional serialized dependency tree
+}
+
+// Vulnerability interface
+interface Vulnerability {
+  id: string;
+  severity: 'critical' | 'high' | 'medium' | 'low' | 'info';
+  description: string;
+  references?: string[];
+  fixedIn?: string;
+}
+
+// State transition history
+interface StateTransition {
+  state: string;
+  timestamp: string;
+  metadata?: Record<string, any>;
+}
+
 // Scan types
 interface Dependency {
   packageName: string;
   currentVersion: string;
   latestVersion?: string;
   isOutdated: boolean;
-  vulnerabilities?: Array<{
-    id: string;
-    severity: string;
-    description: string;
-    references?: string[];
-    fixedIn?: string;
-  }>;
+  vulnerabilities?: Vulnerability[];
+  filePath?: string;
+  dependencyType?: 'dependencies' | 'devDependencies' | 'peerDependencies';
+  // Transitive dependency information
+  transitiveDependencies?: TransitiveDependencyInfo;
 }
 
 interface ScanResult {
   id: string;
   repositoryId: string;
+  userId: string;
   status: 'pending' | 'in-progress' | 'completed' | 'failed';
+  // State machine fields
+  state: string;
+  stateHistory: StateTransition[];
+  // Scan options
+  includeVulnerabilities: boolean;
+  createPR: boolean;
+  triggerType: 'scheduled' | 'manual' | 'push';
+  branch?: string;
+  commit?: string;
+  // Dependencies and counts
   dependencies: Dependency[];
   outdatedCount: number;
   vulnerabilityCount: number;
+  highSeverityCount: number;
+  // PR information
+  prNumber?: number;
+  prUrl?: string;
+  // Error information
+  errorMessage?: string;
+  // Transitive dependency aggregate statistics
+  transitiveDependenciesStatus?: 'not_started' | 'in_progress' | 'completed' | 'failed';
+  transitiveDependencyCount?: number;
+  vulnerableTransitiveDependencyCount?: number;
+  outdatedTransitiveDependencyCount?: number;
+  maxTransitiveDependencyDepth?: number;
+  transitiveDependencyFallbackMethod?: 'lockfile' | 'api' | null;
+  // Timestamps
   startedAt?: string;
   completedAt?: string;
   createdAt: string;
+  updatedAt?: string;
 }
 
 interface ScanHistory {
@@ -186,6 +237,22 @@ const apiClient = {
   getDependencyVulnerabilities: async (scanId: string, packageName: string) => {
     return api.get(`/vulnerabilities/dependency/${scanId}/${packageName}`);
   },
+};
+
+// Export types for use in components
+export type {
+  TransitiveDependencyInfo,
+  Vulnerability,
+  StateTransition,
+  Dependency,
+  ScanResult,
+  ScanHistory,
+  RepositoryData,
+  RepositorySummary,
+  NotificationConfig,
+  ConfigData,
+  User,
+  OnboardingStatus,
 };
 
 export default apiClient;
