@@ -12,6 +12,7 @@ import RepositorySelect from './pages/onboarding/RepositorySelect';
 import ConfigSetup from './pages/onboarding/ConfigSetup';
 import Complete from './pages/onboarding/Complete';
 import Dashboard from './pages/dashboard/Dashboard';
+import DependencyDetails from './components/DependencyDetails';
 import NotFound from './pages/NotFound';
 
 // Protected route component
@@ -91,6 +92,16 @@ const AppRoutes: React.FC = () => {
         element={
           <ProtectedRoute>
             <Dashboard />
+          </ProtectedRoute>
+        }
+      />
+
+      {/* Dependency Details Route */}
+      <Route
+        path='/repository/:repositoryId/dependencies'
+        element={
+          <ProtectedRoute>
+            <DependencyDetails />
           </ProtectedRoute>
         }
       />

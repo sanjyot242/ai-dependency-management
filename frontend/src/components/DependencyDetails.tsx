@@ -1,18 +1,13 @@
 import React, { useEffect, useState } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
 import apiClient, {
   Dependency,
   ScanResult
 } from '../api';
 
-interface DependencyDetailsProps {
-  repositoryId: string;
-  onClose: () => void;
-}
-
-const DependencyDetails: React.FC<DependencyDetailsProps> = ({
-  repositoryId,
-  onClose,
-}) => {
+const DependencyDetails: React.FC = () => {
+  const { repositoryId } = useParams<{ repositoryId: string }>();
+  const navigate = useNavigate();
   const [scan, setScan] = useState<ScanResult | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -23,6 +18,12 @@ const DependencyDetails: React.FC<DependencyDetailsProps> = ({
 
   useEffect(() => {
     const fetchScanDetails = async () => {
+      if (!repositoryId) {
+        setError('Repository ID is required');
+        setLoading(false);
+        return;
+      }
+
       try {
         setLoading(true);
         const response = await apiClient.getLatestRepositoryScan(repositoryId);
@@ -157,8 +158,8 @@ const DependencyDetails: React.FC<DependencyDetailsProps> = ({
 
   if (loading) {
     return (
-      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-        <div className="bg-white rounded-lg p-8">
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="bg-white rounded-lg p-8 shadow-lg">
           <div className="flex justify-center">
             <div className="animate-spin h-12 w-12 border-4 border-blue-500 rounded-full border-t-transparent"></div>
           </div>
@@ -170,13 +171,13 @@ const DependencyDetails: React.FC<DependencyDetailsProps> = ({
 
   if (error || !scan) {
     return (
-      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-        <div className="bg-white rounded-lg p-8 max-w-md">
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="bg-white rounded-lg p-8 max-w-md shadow-lg">
           <div className="text-red-500 mb-4">{error || 'No data available'}</div>
           <button
-            onClick={onClose}
+            onClick={() => navigate(-1)}
             className="px-4 py-2 bg-gray-200 rounded hover:bg-gray-300">
-            Close
+            Go Back
           </button>
         </div>
       </div>
@@ -187,8 +188,8 @@ const DependencyDetails: React.FC<DependencyDetailsProps> = ({
   const vulnerabilityBreakdown = getVulnerabilitySeverityBreakdown();
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 overflow-y-auto">
-      <div className="bg-white rounded-lg shadow-2xl max-w-7xl w-full max-h-[95vh] overflow-hidden flex flex-col">
+    <div className="min-h-screen bg-gray-50">
+      <div className="max-w-7xl mx-auto">
         {/* Header */}
         <div className="bg-gradient-to-r from-blue-600 to-blue-800 text-white p-6">
           <div className="flex justify-between items-start">
@@ -198,21 +199,21 @@ const DependencyDetails: React.FC<DependencyDetailsProps> = ({
                 Comprehensive dependency and vulnerability analysis
               </p>
               <div className="flex gap-4 mt-3 text-sm">
-                <span className="bg-white bg-opacity-20 px-3 py-1 rounded">
+                <span className="bg-blue-900 bg-opacity-50 px-3 py-1 rounded text-white">
                   Scan ID: {scan.id}
                 </span>
-                <span className="bg-white bg-opacity-20 px-3 py-1 rounded">
+                <span className="bg-blue-900 bg-opacity-50 px-3 py-1 rounded text-white">
                   Trigger: {scan.triggerType}
                 </span>
-                <span className="bg-white bg-opacity-20 px-3 py-1 rounded">
+                <span className="bg-blue-900 bg-opacity-50 px-3 py-1 rounded text-white">
                   Status: {scan.status}
                 </span>
               </div>
             </div>
             <button
-              onClick={onClose}
-              className="px-5 py-2 bg-white bg-opacity-20 hover:bg-opacity-30 rounded transition-colors font-medium">
-              Close
+              onClick={() => navigate(-1)}
+              className="px-5 py-2 bg-white text-blue-800 hover:bg-blue-50 rounded transition-colors font-medium">
+              Back to Dashboard
             </button>
           </div>
         </div>
