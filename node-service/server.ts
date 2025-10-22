@@ -163,6 +163,12 @@ app.get(
   dependencyScanController.getCurrentRepositoryScan
 );
 
+app.get(
+  '/api/dependencies/repo/:repoId/latest-scan', // NEW: Added endpoint for latest scan with full details
+  authenticateToken,
+  dependencyScanController.getLatestRepositoryScan
+);
+
 app.post(
   '/api/vulnerabilities/scan',
   authenticateToken,

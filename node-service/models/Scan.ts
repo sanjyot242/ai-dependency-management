@@ -22,6 +22,21 @@ const VulnerabilitySchema = new Schema<IVulnerability>({
   fixedIn: String,
 });
 
+// Transitive Dependency Information Schema
+const TransitiveDependencyInfoSchema = new Schema({
+  count: { type: Number, default: 0 },
+  vulnerableCount: { type: Number, default: 0 },
+  outdatedCount: { type: Number, default: 0 },
+  maxDepth: { type: Number, default: 0 },
+  analyzed: { type: Boolean, default: false },
+  storageType: {
+    type: String,
+    enum: ['embedded', 'external'],
+    default: 'embedded'
+  },
+  tree: { type: Schema.Types.Mixed }, // Serialized dependency tree (optional, for detailed view)
+});
+
 const DependencySchema = new Schema<IDependency>({
   packageName: { type: String, required: true },
   currentVersion: { type: String, required: true },
@@ -33,6 +48,8 @@ const DependencySchema = new Schema<IDependency>({
     type: String,
     enum: ['dependencies', 'devDependencies', 'peerDependencies'],
   },
+  // Add transitive dependency information
+  transitiveDependencies: TransitiveDependencyInfoSchema,
 });
 
 const StateTransitionSchema = new Schema<StateTransition>({
@@ -131,6 +148,14 @@ const ScanSchema = new Schema<IScan>({
     default: 0,
   },
   vulnerableTransitiveDependencyCount: {
+    type: Number,
+    default: 0,
+  },
+  outdatedTransitiveDependencyCount: {
+    type: Number,
+    default: 0,
+  },
+  maxTransitiveDependencyDepth: {
     type: Number,
     default: 0,
   },

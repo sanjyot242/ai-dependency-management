@@ -636,6 +636,83 @@ const exsistingDependencyScanController = {
   },
 
   /**
+   * Get latest scan information with full details for a repository
+   * This endpoint returns complete scan data including dependencies, state history, etc.
+   */
+  getLatestRepositoryScan: async (
+    req: Request,
+    res: Response
+  ): Promise<void> => {
+    try {
+      logger.info('Getting latest scan details for repository');
+      const userId = req.user!.id;
+      const { repoId } = req.params;
+
+      logger.info('User ID:', { userId });
+      logger.info('Repository ID:', { repoId });
+
+      // Find the most recent scan for this repository
+      const latestScan = await Scan.findOne({
+        repositoryId: repoId,
+        userId: userId,
+      }).sort({ createdAt: -1 });
+
+      if (!latestScan) {
+        logger.info('No scan found for repository:', { repoId });
+        res.status(404).json({
+          error: 'No scan found for this repository',
+          repository: repoId,
+        });
+        return;
+      }
+
+      logger.info('Latest scan found:', {
+        id: latestScan._id,
+        status: latestScan.status,
+        state: latestScan.state,
+      });
+
+      // Return full scan data including all fields
+      res.json({
+        id: latestScan._id,
+        repositoryId: latestScan.repositoryId,
+        userId: latestScan.userId,
+        status: latestScan.status,
+        state: latestScan.state,
+        stateHistory: latestScan.stateHistory,
+        includeVulnerabilities: latestScan.includeVulnerabilities,
+        createPR: latestScan.createPR,
+        triggerType: latestScan.triggerType,
+        branch: latestScan.branch,
+        commit: latestScan.commit,
+        dependencies: latestScan.dependencies,
+        outdatedCount: latestScan.outdatedCount,
+        vulnerabilityCount: latestScan.vulnerabilityCount,
+        highSeverityCount: latestScan.highSeverityCount,
+        prNumber: latestScan.prNumber,
+        prUrl: latestScan.prUrl,
+        errorMessage: latestScan.errorMessage,
+        transitiveDependenciesStatus: latestScan.transitiveDependenciesStatus,
+        transitiveDependencyCount: latestScan.transitiveDependencyCount,
+        vulnerableTransitiveDependencyCount: latestScan.vulnerableTransitiveDependencyCount,
+        outdatedTransitiveDependencyCount: latestScan.outdatedTransitiveDependencyCount,
+        maxTransitiveDependencyDepth: latestScan.maxTransitiveDependencyDepth,
+        transitiveDependencyFallbackMethod: latestScan.transitiveDependencyFallbackMethod,
+        startedAt: latestScan.startedAt,
+        completedAt: latestScan.completedAt,
+        createdAt: latestScan.createdAt,
+        updatedAt: latestScan.updatedAt,
+      });
+    } catch (error) {
+      logger.error('Error fetching latest scan:', error);
+      res.status(500).json({
+        error: 'Failed to fetch latest scan',
+        details: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  },
+
+  /**
    * Manually initiate vulnerability scan for a completed dependency scan
    */
   initiateVulnerabilityScan: async (
