@@ -86,6 +86,21 @@ interface Vulnerability {
   description: string;
   references?: string[];
   fixedIn?: string;
+
+  // AI fields
+  aiGeneratedDescription?: string;
+  aiDeterminedSeverity?: 'critical' | 'high' | 'medium' | 'low' | 'info';
+  aiSeverityConfidence?: number;
+  aiAnalysisTimestamp?: string;
+  aiAnalysisError?: string;
+  aiSeverityFactors?: {
+    cvssScore?: number;
+    exploitability?: string;
+    packageCriticality?: string;
+    patchAvailable?: boolean;
+    vulnerabilityAge?: number;
+    reasoning?: string;
+  };
 }
 
 // State transition history
