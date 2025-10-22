@@ -47,6 +47,18 @@ export interface IRepository extends Document {
 }
 
 /**
+ * Interface for AI severity analysis factors
+ */
+export interface IAISeverityFactors {
+  cvssScore?: number;
+  exploitability?: string;
+  packageCriticality?: string;
+  patchAvailable?: boolean;
+  vulnerabilityAge?: number;
+  reasoning?: string;
+}
+
+/**
  * Interface for a vulnerability
  */
 export interface IVulnerability {
@@ -55,6 +67,14 @@ export interface IVulnerability {
   description: string;
   references?: string[];
   fixedIn?: string;
+
+  // AI-generated fields (optional for backward compatibility)
+  aiGeneratedDescription?: string;
+  aiDeterminedSeverity?: 'critical' | 'high' | 'medium' | 'low' | 'info';
+  aiSeverityConfidence?: number; // 0-100
+  aiAnalysisTimestamp?: Date;
+  aiAnalysisError?: string;
+  aiSeverityFactors?: IAISeverityFactors;
 }
 
 /**

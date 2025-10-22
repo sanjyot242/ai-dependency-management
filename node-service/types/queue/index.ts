@@ -67,3 +67,26 @@ export interface WebSocketNotificationMessage {
   type: 'scan_complete' | 'pr_created' | 'test_message';
   data: any;
 }
+
+/**
+ * Message for AI vulnerability analysis processing
+ */
+export interface AIVulnerabilityMessage {
+  scanId: string;
+  userId: string;
+  packageName: string;
+  vulnerabilityId: string;
+  osvData: {
+    id: string;
+    description: string;
+    severity: any;
+    references: string[];
+    fixedIn?: string;
+  };
+  packageContext: {
+    currentVersion: string;
+    latestVersion?: string;
+    dependencyType?: string;
+    ecosystem: string;
+  };
+}

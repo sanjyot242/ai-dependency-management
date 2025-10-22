@@ -10,6 +10,16 @@ import { StateTransition } from '../types/models';
 
 import { IScan } from '../types/models';
 
+// AI Severity Factors Schema
+const AISeverityFactorsSchema = new Schema({
+  cvssScore: Number,
+  exploitability: String,
+  packageCriticality: String,
+  patchAvailable: Boolean,
+  vulnerabilityAge: Number,
+  reasoning: String,
+}, { _id: false });
+
 const VulnerabilitySchema = new Schema<IVulnerability>({
   id: { type: String, required: true },
   severity: {
@@ -20,6 +30,21 @@ const VulnerabilitySchema = new Schema<IVulnerability>({
   description: { type: String, required: true },
   references: [String],
   fixedIn: String,
+
+  // AI-generated fields (optional for backward compatibility)
+  aiGeneratedDescription: String,
+  aiDeterminedSeverity: {
+    type: String,
+    enum: ['critical', 'high', 'medium', 'low', 'info'],
+  },
+  aiSeverityConfidence: {
+    type: Number,
+    min: 0,
+    max: 100,
+  },
+  aiAnalysisTimestamp: Date,
+  aiAnalysisError: String,
+  aiSeverityFactors: AISeverityFactorsSchema,
 });
 
 // Transitive Dependency Information Schema
@@ -174,6 +199,9 @@ ScanSchema.index({ repositoryId: 1, createdAt: -1 });
 ScanSchema.index({ userId: 1, createdAt: -1 });
 ScanSchema.index({ state: 1 });
 ScanSchema.index({ status: 1 });
+
+// Index for AI analysis timestamp (for querying AI-analyzed vulnerabilities)
+ScanSchema.index({ 'dependencies.vulnerabilities.aiAnalysisTimestamp': 1 });
 
 // Update timestamp on save
 ScanSchema.pre('save', function (next) {
