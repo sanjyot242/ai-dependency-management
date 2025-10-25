@@ -15,7 +15,7 @@ services:
     environment:
       - NODE_ENV=production
       - MONGO_URL=mongodb://db:27017/dependencydb
-      - PYTHON_SERVICE_URL=http://python-service:3002
+      - PYTHON_SERVICE_URL=http://python-service:8000
       - FRONTEND_URL=http://localhost:8080
       - GITHUB_CLIENT_ID=${GITHUB_CLIENT_ID}
       - GITHUB_CLIENT_SECRET=${GITHUB_CLIENT_SECRET}
@@ -24,25 +24,42 @@ services:
       - RABBITMQ_URL=amqp://user:password@rabbitmq:5672
       - JWT_SECRET=${JWT_SECRET:-your_default_secret_key}
       - GITHUB_WEBHOOK_SECRET=your-webhook-secret
+      - AI_ANALYSIS_ENABLED=true
     networks:
       - app-network
     restart: unless-stopped
 
   # Worker Process for Background Jobs
 
-  # Python Service for Any ML/Analysis Needs
-  # python-service:
-  #   build:
-  #     context: ./python-service
-  #     dockerfile: Dockerfile
-  #   container_name: python-service
-  #   ports:
-  #     - '3002:3002'
-  #   environment:
-  #     - PYTHONUNBUFFERED=1
-  #   networks:
-  #     - app-network
-  #   restart: unless-stopped
+  # Python AI Service for Vulnerability Analysis
+  python-service:
+    build:
+      context: ./python-service
+      dockerfile: Dockerfile
+    container_name: python-ai-service
+    ports:
+      - '8000:8000'
+    depends_on:
+      - db
+      - rabbitmq
+    environment:
+      - PYTHONUNBUFFERED=1
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - OPENAI_MODEL=gpt-4
+      - OPENAI_TEMPERATURE=0.3
+      - OPENAI_MAX_TOKENS=500
+      - RABBITMQ_URL=amqp://user:password@rabbitmq:5672
+      - AI_QUEUE_NAME=ai_vulnerability_analysis
+      - MONGODB_URI=mongodb://db:27017/dependencydb
+      - MONGODB_DATABASE=dependencydb
+      - LOG_LEVEL=INFO
+      - SERVICE_PORT=8000
+      - MAX_RETRIES=3
+      - RETRY_DELAY_SECONDS=2
+      - PROCESSING_TIMEOUT_SECONDS=30
+    networks:
+      - app-network
+    restart: unless-stopped
 
   # React Frontend
   frontend:
