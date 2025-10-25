@@ -180,16 +180,53 @@ export class DependencyScanService {
   private async getDefaultBranch(
     repository: IRepository
   ): Promise<{ name: string; sha: string }> {
-    try {
-      // If defaultBranch is already in the repository record, use that
-      if (repository.defaultBranch) {
-        const branchResponse = await axios.get<GithubBranch>(
-          `https://api.github.com/repos/${repository.fullName}/branches/${repository.defaultBranch}`,
+    const maxRetries = 3;
+    let lastError: any;
+
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        // If defaultBranch is already in the repository record, use that
+        if (repository.defaultBranch) {
+          const branchResponse = await axios.get<GithubBranch>(
+            `https://api.github.com/repos/${repository.fullName}/branches/${repository.defaultBranch}`,
+            {
+              headers: {
+                Authorization: `token ${this.githubToken}`,
+                Accept: 'application/vnd.github.v3+json',
+              },
+              timeout: 10000, // 10 second timeout
+            }
+          );
+
+          return {
+            name: branchResponse.data.name,
+            sha: branchResponse.data.commit.sha,
+          };
+        }
+
+        // Otherwise, fetch from GitHub API
+        const repoResponse = await axios.get(
+          `https://api.github.com/repos/${repository.fullName}`,
           {
             headers: {
               Authorization: `token ${this.githubToken}`,
               Accept: 'application/vnd.github.v3+json',
             },
+            timeout: 10000, // 10 second timeout
+          }
+        );
+
+        const defaultBranchName = repoResponse.data.default_branch;
+
+        // Get the branch details
+        const branchResponse = await axios.get<GithubBranch>(
+          `https://api.github.com/repos/${repository.fullName}/branches/${defaultBranchName}`,
+          {
+            headers: {
+              Authorization: `token ${this.githubToken}`,
+              Accept: 'application/vnd.github.v3+json',
+            },
+            timeout: 10000, // 10 second timeout
           }
         );
 
@@ -197,40 +234,35 @@ export class DependencyScanService {
           name: branchResponse.data.name,
           sha: branchResponse.data.commit.sha,
         };
+      } catch (error: any) {
+        lastError = error;
+        const isRetryable =
+          error.code === 'ECONNRESET' ||
+          error.code === 'ETIMEDOUT' ||
+          error.code === 'ECONNREFUSED' ||
+          error.message?.includes('socket hang up');
+
+        if (isRetryable && attempt < maxRetries) {
+          const delay = Math.pow(2, attempt) * 1000; // Exponential backoff: 2s, 4s, 8s
+          logger.warn(
+            `GitHub API connection error (attempt ${attempt}/${maxRetries}), retrying in ${delay}ms: ${error.message}`
+          );
+          await new Promise((resolve) => setTimeout(resolve, delay));
+          continue;
+        }
+
+        // If not retryable or out of retries, throw
+        break;
       }
-
-      // Otherwise, fetch from GitHub API
-      const repoResponse = await axios.get(
-        `https://api.github.com/repos/${repository.fullName}`,
-        {
-          headers: {
-            Authorization: `token ${this.githubToken}`,
-            Accept: 'application/vnd.github.v3+json',
-          },
-        }
-      );
-
-      const defaultBranchName = repoResponse.data.default_branch;
-
-      // Get the branch details
-      const branchResponse = await axios.get<GithubBranch>(
-        `https://api.github.com/repos/${repository.fullName}/branches/${defaultBranchName}`,
-        {
-          headers: {
-            Authorization: `token ${this.githubToken}`,
-            Accept: 'application/vnd.github.v3+json',
-          },
-        }
-      );
-
-      return {
-        name: branchResponse.data.name,
-        sha: branchResponse.data.commit.sha,
-      };
-    } catch (error) {
-      console.error('Error getting default branch:', error);
-      throw new Error('Failed to get repository default branch');
     }
+
+    logger.error(
+      `Failed to get default branch after ${maxRetries} attempts:`,
+      lastError
+    );
+    throw new Error(
+      `Failed to get repository default branch: ${lastError?.message || 'Unknown error'}`
+    );
   }
 
   /**
