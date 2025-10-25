@@ -92,9 +92,13 @@ class MongoDBClient:
             update_fields['dependencies.$[dep].vulnerabilities.$[vuln].aiAnalysisTimestamp'] = \
                 datetime.utcnow()
 
+            # Convert scan_id to ObjectId if it's a string
+            from bson import ObjectId
+            query_id = ObjectId(scan_id) if isinstance(scan_id, str) else scan_id
+
             # Update the scan document
             result = self.scans_collection.update_one(
-                {'_id': scan_id},
+                {'_id': query_id},
                 {'$set': update_fields},
                 array_filters=[
                     {'dep.packageName': package_name},
