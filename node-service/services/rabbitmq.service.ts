@@ -15,6 +15,7 @@ export const QUEUE_VULNERABILITY_SCAN = 'vulnerability_scan';
 export const QUEUE_SCAN_COMPLETE = 'scan_complete_notification';
 export const QUEUE_PR_CREATION = 'dependency_pr_creation';
 export const QUEUE_WEBSOCKET_NOTIFICATION = 'websocket_notification';
+export const QUEUE_AI_VULNERABILITY_ANALYSIS = 'ai_vulnerability_analysis';
 
 class RabbitMQService {
   private connection: ChannelModel | null = null;
@@ -60,6 +61,9 @@ class RabbitMQService {
       await this.channel.assertQueue(QUEUE_SCAN_COMPLETE, { durable: true });
       await this.channel.assertQueue(QUEUE_PR_CREATION, { durable: true });
       await this.channel.assertQueue(QUEUE_WEBSOCKET_NOTIFICATION, {
+        durable: true,
+      });
+      await this.channel.assertQueue(QUEUE_AI_VULNERABILITY_ANALYSIS, {
         durable: true,
       });
 

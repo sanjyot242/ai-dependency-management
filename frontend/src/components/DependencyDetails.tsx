@@ -540,31 +540,165 @@ const DependencyDetails: React.FC = () => {
                                   </svg>
                                   Direct Vulnerabilities ({dep.vulnerabilities.length})
                                 </h4>
-                                <div className="space-y-2">
+                                <div className="space-y-3">
                                   {dep.vulnerabilities.map((vuln) => (
                                     <div key={vuln.id} className="bg-white p-4 rounded border border-red-200">
-                                      <div className="flex justify-between items-start mb-2">
+                                      {/* Header with ID and Dual Severity Badges */}
+                                      <div className="flex justify-between items-start mb-3">
                                         <span className="font-mono text-sm font-medium">{vuln.id}</span>
-                                        <span className={`px-2 py-1 text-xs rounded font-bold ${
-                                          vuln.severity === 'critical'
-                                            ? 'bg-purple-100 text-purple-800'
-                                            : vuln.severity === 'high'
-                                            ? 'bg-red-100 text-red-800'
-                                            : vuln.severity === 'medium'
-                                            ? 'bg-yellow-100 text-yellow-800'
-                                            : vuln.severity === 'low'
-                                            ? 'bg-blue-100 text-blue-800'
-                                            : 'bg-gray-100 text-gray-800'
-                                        }`}>
-                                          {vuln.severity.toUpperCase()}
-                                        </span>
+                                        <div className="flex gap-2 items-center">
+                                          {/* CVSS Severity */}
+                                          <div className="flex flex-col items-end">
+                                            <span className="text-xs text-gray-500 mb-1">CVSS</span>
+                                            <span className={`px-2 py-1 text-xs rounded font-bold ${
+                                              vuln.severity === 'critical'
+                                                ? 'bg-purple-100 text-purple-800'
+                                                : vuln.severity === 'high'
+                                                ? 'bg-red-100 text-red-800'
+                                                : vuln.severity === 'medium'
+                                                ? 'bg-yellow-100 text-yellow-800'
+                                                : vuln.severity === 'low'
+                                                ? 'bg-blue-100 text-blue-800'
+                                                : 'bg-gray-100 text-gray-800'
+                                            }`}>
+                                              {vuln.severity.toUpperCase()}
+                                            </span>
+                                          </div>
+
+                                          {/* AI Severity (if available) */}
+                                          {vuln.aiDeterminedSeverity && (
+                                            <div className="flex flex-col items-end">
+                                              <span className="text-xs text-gray-500 mb-1">AI</span>
+                                              <span className={`px-2 py-1 text-xs rounded font-bold flex items-center gap-1 ${
+                                                vuln.aiDeterminedSeverity === 'critical'
+                                                  ? 'bg-purple-100 text-purple-800'
+                                                  : vuln.aiDeterminedSeverity === 'high'
+                                                  ? 'bg-red-100 text-red-800'
+                                                  : vuln.aiDeterminedSeverity === 'medium'
+                                                  ? 'bg-yellow-100 text-yellow-800'
+                                                  : vuln.aiDeterminedSeverity === 'low'
+                                                  ? 'bg-blue-100 text-blue-800'
+                                                  : 'bg-gray-100 text-gray-800'
+                                              }`}>
+                                                {vuln.aiDeterminedSeverity.toUpperCase()}
+                                                {vuln.aiSeverityConfidence && (
+                                                  <span className="text-xs">
+                                                    {vuln.aiSeverityConfidence}%
+                                                  </span>
+                                                )}
+                                              </span>
+                                            </div>
+                                          )}
+                                        </div>
                                       </div>
-                                      <p className="text-sm text-gray-700 mb-2">{vuln.description}</p>
+
+                                      {/* AI-Generated Description (if available) */}
+                                      {vuln.aiGeneratedDescription && (
+                                        <div className="bg-blue-50 border border-blue-200 rounded p-3 mb-3">
+                                          <div className="flex items-center gap-2 mb-2">
+                                            <span className="text-sm font-semibold text-blue-800">
+                                              AI-Generated Summary
+                                            </span>
+                                            {vuln.aiSeverityConfidence && (
+                                              <span className="text-xs text-blue-600">
+                                                Confidence: {vuln.aiSeverityConfidence}%
+                                              </span>
+                                            )}
+                                          </div>
+                                          <p className="text-sm text-gray-800">
+                                            {vuln.aiGeneratedDescription}
+                                          </p>
+                                        </div>
+                                      )}
+
+                                      {/* Loading Indicator (if AI analysis in progress) */}
+                                      {!vuln.aiGeneratedDescription && !vuln.aiAnalysisError && (
+                                        <div className="flex items-center gap-2 text-sm text-gray-500 mb-3">
+                                          <div className="animate-spin h-4 w-4 border-2 border-blue-500 rounded-full border-t-transparent"></div>
+                                          <span>AI analysis in progress...</span>
+                                        </div>
+                                      )}
+
+                                      {/* Error Fallback */}
+                                      {vuln.aiAnalysisError && (
+                                        <div className="bg-yellow-50 border border-yellow-200 rounded p-2 text-sm mb-3">
+                                          <span className="text-yellow-800">
+                                            AI analysis unavailable.{' '}
+                                          </span>
+                                          {vuln.references?.[0] && (
+                                            <a
+                                              href={vuln.references[0]}
+                                              target="_blank"
+                                              rel="noopener noreferrer"
+                                              className="text-blue-600 underline">
+                                              View OSV Details →
+                                            </a>
+                                          )}
+                                        </div>
+                                      )}
+
+                                      {/* Original Description */}
+                                      <div className="mb-3">
+                                        <span className="text-xs text-gray-500">
+                                          Original Description
+                                        </span>
+                                        <p className="text-sm text-gray-700 mt-1">{vuln.description}</p>
+                                      </div>
+
+                                      {/* Fixed In */}
                                       {vuln.fixedIn && (
                                         <p className="text-xs text-green-700 mb-2">
                                           <span className="font-medium">Fixed in:</span> {vuln.fixedIn}
                                         </p>
                                       )}
+
+                                      {/* AI Analysis Factors (Expandable) */}
+                                      {vuln.aiSeverityFactors && (
+                                        <details className="mt-3 mb-3">
+                                          <summary className="cursor-pointer text-sm font-medium text-gray-700 hover:text-gray-900">
+                                            AI Analysis Details
+                                          </summary>
+                                          <div className="mt-2 pl-4 space-y-2 text-sm bg-gray-50 border rounded p-3">
+                                            {vuln.aiSeverityFactors.exploitability && (
+                                              <div>
+                                                <strong>Exploitability:</strong>{' '}
+                                                {vuln.aiSeverityFactors.exploitability}
+                                              </div>
+                                            )}
+                                            {vuln.aiSeverityFactors.packageCriticality && (
+                                              <div>
+                                                <strong>Package Criticality:</strong>{' '}
+                                                {vuln.aiSeverityFactors.packageCriticality}
+                                              </div>
+                                            )}
+                                            {vuln.aiSeverityFactors.patchAvailable !== undefined && (
+                                              <div>
+                                                <strong>Patch Available:</strong>{' '}
+                                                {vuln.aiSeverityFactors.patchAvailable ? 'Yes' : 'No'}
+                                              </div>
+                                            )}
+                                            {vuln.aiSeverityFactors.vulnerabilityAge !== undefined && (
+                                              <div>
+                                                <strong>Age:</strong>{' '}
+                                                {vuln.aiSeverityFactors.vulnerabilityAge} days
+                                              </div>
+                                            )}
+                                            {vuln.aiSeverityFactors.cvssScore !== undefined && (
+                                              <div>
+                                                <strong>CVSS Score:</strong>{' '}
+                                                {vuln.aiSeverityFactors.cvssScore}
+                                              </div>
+                                            )}
+                                            {vuln.aiSeverityFactors.reasoning && (
+                                              <div className="italic text-gray-600 mt-2 pt-2 border-t">
+                                                {vuln.aiSeverityFactors.reasoning}
+                                              </div>
+                                            )}
+                                          </div>
+                                        </details>
+                                      )}
+
+                                      {/* References */}
                                       {vuln.references && vuln.references.length > 0 && (
                                         <div className="flex flex-wrap gap-2">
                                           {vuln.references.map((ref, idx) => (
