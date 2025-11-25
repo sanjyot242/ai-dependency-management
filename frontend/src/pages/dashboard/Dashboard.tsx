@@ -1,6 +1,7 @@
 // Updated Dashboard.tsx with WebSocket integration
 import React, { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
+import toast from 'react-hot-toast';
 import { useAuth } from '../../contexts/AuthContext';
 import { useWebSocket } from '../../contexts/WebSocketContext';
 import apiClient from '../../api';
@@ -62,9 +63,18 @@ const Dashboard: React.FC = () => {
       // Initiate vulnerability scan
       await apiClient.initiateVulnerabilityScan(scanId);
 
+      // Show info toast
+      toast.loading('Vulnerability scan started...', {
+        id: `vuln-scan-${repoId}`,
+        duration: 2000,
+      });
+
       // No need to poll anymore - we'll get updates via WebSocket!
     } catch (error) {
       console.error('Error initiating vulnerability scan:', error);
+      toast.error('Failed to start vulnerability scan. Please try again.', {
+        icon: '❌',
+      });
       setVulnScanning((prev) => ({ ...prev, [repoId]: false }));
     }
   };
@@ -141,7 +151,18 @@ const Dashboard: React.FC = () => {
     const handleScanComplete = (data: any) => {
       console.log('Scan complete notification received:', data);
 
-      const { scanId, repositoryId, status, scanType } = data;
+      const { scanId, repositoryId, status, scanType, message } = data;
+
+      // Show toast notification
+      if (status === 'completed') {
+        toast.success(message || `${scanType} scan completed successfully!`, {
+          icon: '✅',
+        });
+      } else if (status === 'failed') {
+        toast.error(message || `${scanType} scan failed`, {
+          icon: '❌',
+        });
+      }
 
       // Update repository and scan data
       setRepositories((prevRepos) =>
@@ -185,7 +206,17 @@ const Dashboard: React.FC = () => {
     // Listen for PR creation events
     const handlePRCreated = (data: any) => {
       console.log('PR created notification received:', data);
-      // Could show a notification or update UI
+
+      // Show success toast with PR details
+      toast.success(
+        `Pull request created successfully!${
+          data.prDetails?.url ? ' Click to view.' : ''
+        }`,
+        {
+          icon: '🎉',
+          duration: 6000,
+        }
+      );
     };
 
     // Set up event listeners
@@ -204,6 +235,12 @@ const Dashboard: React.FC = () => {
       setScanning((prev) => ({ ...prev, [repoId]: true }));
       const response = await apiClient.initiateRepositoryScan(repoId);
 
+      // Show info toast
+      toast.loading('Dependency scan started...', {
+        id: `scan-${repoId}`,
+        duration: 2000,
+      });
+
       // Store the scan ID from the response
       if (response.data && response.data.scanId) {
         // Update repositories with current scan ID and pending status
@@ -221,6 +258,9 @@ const Dashboard: React.FC = () => {
       }
     } catch (error) {
       console.error('Error initiating scan:', error);
+      toast.error('Failed to start scan. Please try again.', {
+        icon: '❌',
+      });
       setScanning((prev) => ({ ...prev, [repoId]: false }));
     }
   };
