@@ -1,0 +1,24 @@
+---
+from: markdown
+to: pdf
+pdf-engine: xelatex
+
+toc: true
+toc-depth: 3
+number-sections: true
+
+metadata:
+  title: AI-Powered Dependency Management System
+  subtitle: CPSC-597 Spring 2025 Project Report
+  author: Sanjyot Satvi
+  date: Spring 2025
+
+variables:
+  documentclass: report
+  geometry: margin=1in
+  papersize: letter
+  fontsize: 12pt
+  mainfont: Times New Roman
+  linestretch: 1.5
+  linkcolor: blue
+  urlcolor: blue
