@@ -3,14 +3,14 @@
 ```
 Submitted by:
 ```
-## Sanjyot Satvi
+## Sanjyot Satvi {.unnumbered}
 
-## 885146977
+## 885146977 {.unnumbered}
 
 ```
 California State University, Fullerton
 ```
-### CPSC-597
+### CPSC-597 {.unnumbered}
 
 ```
 Spring 2025
@@ -23,7 +23,7 @@ Department of Computer Science
 ```
 
 
-## ABSTRACT
+## ABSTRACT {.unnumbered}
 
 This project presents the design and implementation of an AI-Powered Dependency Management System aimed at enhancing software security through intelligent vulnerability analysis and automated risk assessment. Traditional dependency management tools like Dependabot and Renovate create pull requests for outdated packages but fail to provide developers with contextual risk assessment, leaving them to manually research and evaluate vulnerability severity. This often results in alert fatigue and delayed security patches.
 
@@ -34,39 +34,39 @@ The solution includes a modern web dashboard built with React and TypeScript, a 
 By combining automated vulnerability detection with AI-powered risk contextualization, the system empowers developers to make faster, more informed decisions about dependency updates, ultimately reducing the window of exposure to security vulnerabilities.
 
 
-## Table of Contents
+## Table of Contents {.unnumbered}
 
-- 1 INTRODUCTION
-- 2 REQUIREMENTS DESCRIPTION
-- 3 DESIGN DESCRIPTION
-- 4 IMPLEMENTATION
-- 5 TEST AND INTEGRATION
-- 6 INSTALLATION INSTRUCTIONS
-- 7 OPERATING INSTRUCTIONS
-- 8 RECOMMENDATIONS FOR ENHANCEMENTS
-- 9 REFERENCES
+1. INTRODUCTION
+2. REQUIREMENTS DESCRIPTION
+3. DESIGN DESCRIPTION
+4. IMPLEMENTATION
+5. TEST AND INTEGRATION
+6. INSTALLATION INSTRUCTIONS
+7. OPERATING INSTRUCTIONS
+8. RECOMMENDATIONS FOR ENHANCEMENTS
+9. REFERENCES
 
-## Table of Figures
+## Table of Figures {.unnumbered}
 
-- 1. AI DEPENDENCY MANAGEMENT SYSTEM ARCHITECTURE
-- 2. TECHNOLOGIES AND FRAMEWORKS
-- 3. GITHUB OAUTH LOGIN PAGE
-- 4. REPOSITORY SELECTION PAGE
-- 5. SCAN CONFIGURATION & ONBOARDING
-- 6. SCAN PROGRESS VIEW WITH REAL-TIME UPDATES
-- 7. SCAN RESULTS DASHBOARD
-- 8. DEPENDENCIES LIST VIEW
-- 9. VULNERABILITY LIST WITH SEVERITY BADGES
-- 10. AI-GENERATED VULNERABILITY DESCRIPTION
-- 11. AI SEVERITY RATING WITH CONFIDENCE SCORE
-- 12. ANALYSIS FACTORS BREAKDOWN
-- 13. REAL-TIME WEBSOCKET NOTIFICATIONS
-- 14. RABBITMQ MANAGEMENT INTERFACE
-- 15. PYTHON SERVICE HEALTH CHECK STATUS
-- 16. AI SERVICE PROCESSING LOGS
+1. AI DEPENDENCY MANAGEMENT SYSTEM ARCHITECTURE
+2. TECHNOLOGIES AND FRAMEWORKS
+3. GITHUB OAUTH LOGIN PAGE
+4. REPOSITORY SELECTION PAGE
+5. SCAN CONFIGURATION & ONBOARDING
+6. SCAN PROGRESS VIEW WITH REAL-TIME UPDATES
+7. SCAN RESULTS DASHBOARD
+8. DEPENDENCIES LIST VIEW
+9. VULNERABILITY LIST WITH SEVERITY BADGES
+10. AI-GENERATED VULNERABILITY DESCRIPTION
+11. AI SEVERITY RATING WITH CONFIDENCE SCORE
+12. ANALYSIS FACTORS BREAKDOWN
+13. REAL-TIME WEBSOCKET NOTIFICATIONS
+14. RABBITMQ MANAGEMENT INTERFACE
+15. PYTHON SERVICE HEALTH CHECK STATUS
+16. AI SERVICE PROCESSING LOGS
 
 
-## 1 INTRODUCTION
+## INTRODUCTION
 
 **1.1 Description of the Problem**
 
@@ -128,7 +128,7 @@ The development environment used for building the AI-Powered Dependency Manageme
     - Docker Desktop for containerization
 
 
-## 2 REQUIREMENTS DESCRIPTION
+## REQUIREMENTS DESCRIPTION
 
 **2.1 Functional Requirements (External Functions)**
 
@@ -201,7 +201,7 @@ The system provides the following core external functions accessible to users (p
     - **OpenAI API:** GPT-4 model access for AI analysis
 
 
-## 3 DESIGN DESCRIPTION
+## DESIGN DESCRIPTION
 
 **3.1 System Architecture**
 
@@ -334,7 +334,7 @@ The typical data flow for a complete vulnerability scan is:
 14. User views complete analysis with severity ratings and explanations
 
 
-## 4 IMPLEMENTATION
+## IMPLEMENTATION
 
 **4.1 Authentication Implementation**
 
@@ -618,7 +618,7 @@ The Python AI service generates detailed logs during vulnerability analysis proc
     - Malformed response detection
 
 
-## 5 TEST AND INTEGRATION
+## TEST AND INTEGRATION
 
 **5.1 Test Plan**
 
@@ -693,7 +693,7 @@ Integration followed a bottom-up, incremental approach:
     - Real-time updates: Delivered within 100ms of event
 
 
-## 6 INSTALLATION INSTRUCTIONS
+## INSTALLATION INSTRUCTIONS
 
 **6.1 Prerequisites**
 
@@ -809,7 +809,7 @@ npm run dev
 - RabbitMQ UI: http://localhost:15672 (guest/guest)
 
 
-## 7 OPERATING INSTRUCTIONS
+## OPERATING INSTRUCTIONS
 
 **7.1 Accessing the Application**
 
@@ -908,7 +908,7 @@ npm run dev
     - Check for any new issues introduced
 
 
-## 8 RECOMMENDATIONS FOR ENHANCEMENTS
+## RECOMMENDATIONS FOR ENHANCEMENTS
 
 While the current version of the AI-Powered Dependency Management System meets its core objectives of detecting vulnerabilities and providing AI-powered analysis, several opportunities exist for enhancement:
 

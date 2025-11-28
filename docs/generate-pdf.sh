@@ -74,10 +74,10 @@ fi
 
 # Count how many images exist
 IMAGE_COUNT=$(find "$DOCS_DIR/images" -type f \( -name "*.png" -o -name "*.jpg" -o -name "*.jpeg" \) 2>/dev/null | wc -l | tr -d ' ')
-echo -e "${BLUE}Found ${IMAGE_COUNT}/14 images in docs/images/${NC}"
+echo -e "${BLUE}Found ${IMAGE_COUNT}/16 images in docs/images/${NC}"
 
-if [ "$IMAGE_COUNT" -lt 14 ]; then
-    echo -e "${YELLOW}Note: Only $IMAGE_COUNT of 14 expected images found.${NC}"
+if [ "$IMAGE_COUNT" -lt 16 ]; then
+    echo -e "${YELLOW}Note: Only $IMAGE_COUNT of 16 expected images found.${NC}"
     echo -e "${YELLOW}Missing images will appear as broken links in the PDF.${NC}\n"
 fi
 

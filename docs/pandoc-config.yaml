@@ -6,6 +6,7 @@ pdf-engine: xelatex
 toc: true
 toc-depth: 3
 number-sections: true
+strip-comments: true
 
 metadata:
   title: AI-Powered Dependency Management System
@@ -22,3 +23,4 @@ variables:
   linestretch: 1.5
   linkcolor: blue
   urlcolor: blue
+  unnumbered-sections: true
